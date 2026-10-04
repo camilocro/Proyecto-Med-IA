@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum RolUsuario {
+  paciente
+  medico
+  administrador
+}
+
+enum NivelUrgencia {
+  bajo
+  medio
+  alto
+  emergencia
+}
+
+enum TipoDerivacion {
+  medicina_general
+  especialista
+  emergencia
+}
+
+enum EstadoConsulta {
+  en_proceso
+  esperando_respuestas
+  completada
+  cancelada
+}
+
+// ─── Grupo 1: Usuarios y roles ───────────────────────────────────────────────
+
+model Usuario {
+  id_usuario        Int        @id @default(autoincrement())
+  nombre            String
+  correo            String     @unique
+  password_hash     String
+  rol               RolUsuario
+  activo            Boolean    @default(true)
+  verificado        Boolean    @default(false)
+  intentos_fallidos Int        @default(0)
+  bloqueado_hasta   DateTime?
+  created_at        DateTime   @default(now())
+  updated_at        DateTime   @updatedAt
+
+  paciente          Paciente?
+  medico            Medico?
+  intentos_login    IntentoLogin[]
+  auditoria         AuditoriaAcceso[]
+}
+
+model Paciente {
+  id_paciente      Int       @id @default(autoincrement())
+  id_usuario       Int       @unique
+  fecha_nacimiento DateTime?
+
+  usuario          Usuario   @relation(fields: [id_usuario], references: [id_usuario])
+  consultas        Consulta[]
+}
+
+// ─── Grupo 2: Catálogo médico ────────────────────────────────────────────────
+
+model Especialidad {
+  id_especialidad Int      @id @default(autoincrement())
+  nombre          String   @unique
+  descripcion     String
+  activo          Boolean  @default(true)
+  created_at      DateTime @default(now())
+
+  medicos         Medico[]
+  consultas       Consulta[]
+}
+
+model CentroSalud {
+  id_centro_salud Int      @id @default(autoincrement())
+  nombre          String
+  direccion       String
+  zona            String
+  telefono        String
+  activo          Boolean  @default(true)
+  created_at      DateTime @default(now())
+
+  medicos         Medico[]
+}
+
+model Medico {
+  id_medico               Int      @id @default(autoincrement())
+  id_usuario              Int      @unique
+  id_especialidad         Int
+  id_centro_salud         Int
+  descripcion_profesional String
+  telefono_contacto       String
+  foto_url                String?
+  disponible              Boolean  @default(true)
+  created_at              DateTime @default(now())
+
+  usuario                 Usuario      @relation(fields: [id_usuario], references: [id_usuario])
+  especialidad            Especialidad @relation(fields: [id_especialidad], references: [id_especialidad])
+  centro_salud            CentroSalud  @relation(fields: [id_centro_salud], references: [id_centro_salud])
+  sugerencias             MedicoSugerido[]
+}
+
+// ─── Grupo 3: Núcleo del triage ──────────────────────────────────────────────
+
+model Consulta {
+  id_consulta              Int             @id @default(autoincrement())
+  id_paciente              Int?
+  sesion_anonimo           String?
+  descripcion_sintomas     String
+  id_especialidad_sugerida Int?
+  nivel_urgencia           NivelUrgencia?
+  tipo_derivacion          TipoDerivacion?
+  motivo_derivacion        String?
+  estado                   EstadoConsulta  @default(en_proceso)
+  fecha_consulta           DateTime        @default(now())
+  created_at               DateTime        @default(now())
+
+  paciente                 Paciente?      @relation(fields: [id_paciente], references: [id_paciente])
+  especialidad_sugerida    Especialidad?  @relation(fields: [id_especialidad_sugerida], references: [id_especialidad])
+  rondas                   RondaPreguntas[]
+  sintomas_extraidos       SintomaExtraido[]
+  medicos_sugeridos        MedicoSugerido[]
+}
+
+model RondaPreguntas {
+  id_ronda     Int      @id @default(autoincrement())
+  id_consulta  Int
+  numero_ronda Int
+  created_at   DateTime @default(now())
+
+  consulta     Consulta @relation(fields: [id_consulta], references: [id_consulta])
+  preguntas    PreguntaRespuesta[]
+}
+
+model PreguntaRespuesta {
+  id_pr      Int    @id @default(autoincrement())
+  id_ronda   Int
+  pregunta   String
+  respuesta  String @default("")
+  orden      Int
+
+  ronda      RondaPreguntas @relation(fields: [id_ronda], references: [id_ronda])
+}
+
+model SintomaExtraido {
+  id_sintoma        Int    @id @default(autoincrement())
+  id_consulta       Int
+  descripcion       String
+  zona_cuerpo       String
+  duracion_estimada String
+  relevancia        Int
+
+  consulta          Consulta @relation(fields: [id_consulta], references: [id_consulta])
+}
+
+model MedicoSugerido {
+  id_sugerencia    Int @id @default(autoincrement())
+  id_consulta      Int
+  id_medico        Int
+  orden_sugerencia Int
+
+  consulta         Consulta @relation(fields: [id_consulta], references: [id_consulta])
+  medico           Medico   @relation(fields: [id_medico], references: [id_medico])
+}
+
+// ─── Grupo 4: Seguridad y acceso ─────────────────────────────────────────────
+
+model IntentoLogin {
+  id               Int      @id @default(autoincrement())
+  id_usuario       Int?
+  correo_intentado String
+  ip_address       String
+  exitoso          Boolean
+  fecha            DateTime @default(now())
+
+  usuario          Usuario? @relation(fields: [id_usuario], references: [id_usuario])
+}
+
+model TokenRecuperacion {
+  id         Int      @id @default(autoincrement())
+  id_usuario Int
+  token      String   @unique
+  tipo       String   // 'verificacion_correo' | 'recuperacion_password'
+  expira_en  DateTime
+  usado      Boolean  @default(false)
+  created_at DateTime @default(now())
+}
+
+model NotificacionEmail {
+  id           Int       @id @default(autoincrement())
+  id_usuario   Int?
+  id_consulta  Int?
+  tipo         String    // 'verificacion_correo' | 'resumen_consulta' | ...
+  destinatario String
+  enviado      Boolean   @default(false)
+  fecha_envio  DateTime?
+}
+
+model AuditoriaAcceso {
+  id_auditoria Int      @id @default(autoincrement())
+  id_usuario   Int
+  accion       String
+  ip_address   String
+  exitoso      Boolean
+  fecha        DateTime @default(now())
+
+  usuario      Usuario  @relation(fields: [id_usuario], references: [id_usuario])
+}
+
+// ─── Grupo 5: Control y configuración ────────────────────────────────────────
+
+model LimiteConsultaAnonimo {
+  id         Int      @id @default(autoincrement())
+  sesion_id  String
+  ip_address String
+  fecha      DateTime @db.Date
+  cantidad   Int      @default(0)
+
+  @@unique([sesion_id, fecha])
+}
+
+model ConfiguracionSistema {
+  id_config  Int      @id @default(autoincrement())
+  clave      String   @unique
+  valor      String
+  updated_at DateTime @updatedAt
+}
