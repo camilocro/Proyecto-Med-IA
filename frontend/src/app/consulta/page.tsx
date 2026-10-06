@@ -1,13 +1,14 @@
 'use client'
 
-import { useState }       from 'react'
-import { useRouter }      from 'next/navigation'
+import { useState }                from 'react'
 import { Consulta, RondaPreguntas } from '@/types'
-import { triageService }  from '@/services/triage.service'
-import SintomasForm       from '@/components/triage/SintomasForm'
-import PreguntasIA        from '@/components/triage/PreguntasIA'
-import ResultadoTriage    from '@/components/triage/ResultadoTriage'
-import { AlertCircle }    from 'lucide-react'
+import { triageService }            from '@/services/triage.service'
+import Navbar                       from '@/components/layout/Navbar'
+import Footer                       from '@/components/layout/Footer'
+import SintomasForm                 from '@/components/triage/SintomasForm'
+import PreguntasIA                  from '@/components/triage/PreguntasIA'
+import ResultadoTriage              from '@/components/triage/ResultadoTriage'
+import { AlertCircle }              from 'lucide-react'
 
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
 
@@ -21,7 +22,7 @@ function obtenerRondaActiva(consulta: Consulta): RondaPreguntas | null {
 }
 
 function determinarEtapa(consulta: Consulta): EtapaConsulta {
-  if (consulta.estado === 'completada') return 'resultado'
+  if (consulta.estado === 'completada')          return 'resultado'
   if (consulta.estado === 'esperando_respuestas') return 'preguntas'
   return 'sintomas'
 }
@@ -29,14 +30,12 @@ function determinarEtapa(consulta: Consulta): EtapaConsulta {
 // ─── Componente principal ──────────────────────────────────────────────────────
 
 export default function ConsultaPage() {
-  const router = useRouter()
-
-  const [etapa,              setEtapa]              = useState<EtapaConsulta>('sintomas')
-  const [consulta,           setConsulta]           = useState<Consulta | null>(null)
-  const [descripcionOriginal, setDescripcionOriginal] = useState('')
-  const [cargando,           setCargando]           = useState(false)
-  const [error,              setError]              = useState<string | null>(null)
-  const [consultasRestantes, setConsultasRestantes] = useState(5)
+  const [etapa,               setEtapa]               = useState<EtapaConsulta>('sintomas')
+  const [consulta,            setConsulta]             = useState<Consulta | null>(null)
+  const [descripcionOriginal, setDescripcionOriginal]  = useState('')
+  const [cargando,            setCargando]             = useState(false)
+  const [error,               setError]               = useState<string | null>(null)
+  const [consultasRestantes,  setConsultasRestantes]  = useState(5)
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -110,74 +109,80 @@ export default function ConsultaPage() {
   const indiceActual = PASOS.indexOf(etapa)
 
   return (
-    <main className="min-h-screen bg-[#F8FBFF]">
-      <div className="max-w-2xl mx-auto px-4 py-10">
+    <div className="min-h-screen flex flex-col bg-[#F8FBFF]">
+      <Navbar />
 
-        {/* Indicador de progreso */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {PASOS.map((paso, index) => (
-            <div key={paso} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                  index < indiceActual
-                    ? 'bg-green-500 text-white'
-                    : index === indiceActual
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-200 text-gray-400'
-                }`}
-              >
-                {index < indiceActual ? '✓' : index + 1}
+      <main className="flex-1">
+        <div className="max-w-2xl mx-auto px-4 py-10">
+
+          {/* Indicador de progreso */}
+          <div className="flex items-center justify-center gap-2 mb-8">
+            {PASOS.map((paso, index) => (
+              <div key={paso} className="flex items-center gap-2">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                    index < indiceActual
+                      ? 'bg-green-500 text-white'
+                      : index === indiceActual
+                      ? 'bg-[#1B4F72] text-white'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {index < indiceActual ? '✓' : index + 1}
+                </div>
+                {index < PASOS.length - 1 && (
+                  <div className={`w-12 h-0.5 ${index < indiceActual ? 'bg-green-500' : 'bg-gray-200'}`} />
+                )}
               </div>
-              {index < PASOS.length - 1 && (
-                <div className={`w-12 h-0.5 ${index < indiceActual ? 'bg-green-500' : 'bg-gray-200'}`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Encabezado */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[#1B4F72]">{TITULOS[etapa]}</h1>
-          <p className="text-gray-500 mt-2">{SUBTITULOS[etapa]}</p>
-        </div>
-
-        {/* Error global */}
-        {error && (
-          <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700">{error}</p>
+            ))}
           </div>
-        )}
 
-        {/* Contenido según etapa */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          {etapa === 'sintomas' && (
-            <SintomasForm
-              onSubmit={handleIniciarConsulta}
-              cargando={cargando}
-              consultasRestantes={consultasRestantes}
-            />
+          {/* Encabezado */}
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-[#1B4F72]">{TITULOS[etapa]}</h1>
+            <p className="text-gray-500 mt-2">{SUBTITULOS[etapa]}</p>
+          </div>
+
+          {/* Error global */}
+          {error && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
           )}
 
-          {etapa === 'preguntas' && consulta && obtenerRondaActiva(consulta) && (
-            <PreguntasIA
-              descripcionOriginal={descripcionOriginal}
-              ronda={obtenerRondaActiva(consulta)!}
-              numeroRonda={obtenerRondaActiva(consulta)!.numero_ronda}
-              cargando={cargando}
-              onResponder={handleResponderRonda}
-            />
-          )}
+          {/* Contenido según etapa */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            {etapa === 'sintomas' && (
+              <SintomasForm
+                onSubmit={handleIniciarConsulta}
+                cargando={cargando}
+                consultasRestantes={consultasRestantes}
+              />
+            )}
 
-          {etapa === 'resultado' && consulta && (
-            <ResultadoTriage
-              consulta={consulta}
-              onNuevaConsulta={handleNuevaConsulta}
-            />
-          )}
+            {etapa === 'preguntas' && consulta && obtenerRondaActiva(consulta) && (
+              <PreguntasIA
+                descripcionOriginal={descripcionOriginal}
+                ronda={obtenerRondaActiva(consulta)!}
+                numeroRonda={obtenerRondaActiva(consulta)!.numero_ronda}
+                cargando={cargando}
+                onResponder={handleResponderRonda}
+              />
+            )}
+
+            {etapa === 'resultado' && consulta && (
+              <ResultadoTriage
+                consulta={consulta}
+                onNuevaConsulta={handleNuevaConsulta}
+              />
+            )}
+          </div>
+
         </div>
+      </main>
 
-      </div>
-    </main>
+      <Footer />
+    </div>
   )
 }
