@@ -1,20 +1,20 @@
 'use client'
 
-import { useState, useEffect }       from 'react'
-import Link                           from 'next/link'
-import { triageService }              from '@/services/triage.service'
-import { Consulta, NivelUrgencia }    from '@/types'
-import Navbar                         from '@/components/layout/Navbar'
-import Footer                         from '@/components/layout/Footer'
+import { useState, useEffect }    from 'react'
+import Link                        from 'next/link'
+import { triageService }           from '@/services/triage.service'
+import { Consulta, NivelUrgencia } from '@/types'
+import Navbar                      from '@/components/layout/Navbar'
+import Footer                      from '@/components/layout/Footer'
 import { Calendar, ChevronRight, ClipboardList, AlertCircle } from 'lucide-react'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const ETIQUETA_URGENCIA: Record<NivelUrgencia, { texto: string; clases: string }> = {
-  bajo:       { texto: 'Baja',       clases: 'bg-green-100 text-green-700' },
-  medio:      { texto: 'Media',      clases: 'bg-amber-100 text-amber-700' },
-  alto:       { texto: 'Alta',       clases: 'bg-red-100 text-red-700'     },
-  emergencia: { texto: 'Emergencia', clases: 'bg-red-200 text-red-800'     },
+  bajo:       { texto: 'Baja',       clases: 'badge-urgencia-bajo'  },
+  medio:      { texto: 'Media',      clases: 'badge-urgencia-medio' },
+  alto:       { texto: 'Alta',       clases: 'badge-urgencia-alto'  },
+  emergencia: { texto: 'Emergencia', clases: 'badge-urgencia-alto'  },
 }
 
 const BORDE_URGENCIA: Record<NivelUrgencia, string> = {
@@ -50,11 +50,11 @@ export default function HistorialPage() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#F8FBFF]">
+      <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-[#1B4F72] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
             <p className="text-gray-500 text-sm">Cargando historial...</p>
           </div>
         </main>
@@ -64,19 +64,15 @@ export default function HistorialPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FBFF]">
+    <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
       <main className="flex-1">
         <div className="max-w-2xl mx-auto px-4 py-10">
 
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-bold text-[#1B4F72]">Mi Historial</h1>
-            <Link
-              href="/consulta"
-              className="bg-[#1B4F72] text-white text-sm font-medium px-4 py-2 rounded-lg
-                         hover:bg-[#2E86C1] transition-colors"
-            >
+            <h1 className="text-2xl font-bold text-primary">Mi Historial</h1>
+            <Link href="/consulta" className="btn-primary text-sm px-4 py-2">
               Nueva consulta
             </Link>
           </div>
@@ -97,11 +93,7 @@ export default function HistorialPage() {
               <p className="text-sm text-gray-400 mt-1 mb-6">
                 Realizá tu primera consulta para ver el historial aquí.
               </p>
-              <Link
-                href="/consulta"
-                className="bg-[#1B4F72] text-white font-medium px-6 py-2.5 rounded-lg
-                           hover:bg-[#2E86C1] transition-colors"
-              >
+              <Link href="/consulta" className="btn-primary px-6 py-2.5">
                 Iniciar consulta
               </Link>
             </div>
@@ -118,7 +110,7 @@ export default function HistorialPage() {
                 return (
                   <div
                     key={consulta.id_consulta}
-                    className={`bg-white rounded-xl border border-gray-100 border-l-4 ${borde} p-5 shadow-sm`}
+                    className={`card border-l-4 ${borde} p-5`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -136,11 +128,7 @@ export default function HistorialPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                        {badge && (
-                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badge.clases}`}>
-                            {badge.texto}
-                          </span>
-                        )}
+                        {badge && <span className={badge.clases}>{badge.texto}</span>}
                         <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
                     </div>

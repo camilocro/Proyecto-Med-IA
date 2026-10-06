@@ -22,7 +22,7 @@ function obtenerRondaActiva(consulta: Consulta): RondaPreguntas | null {
 }
 
 function determinarEtapa(consulta: Consulta): EtapaConsulta {
-  if (consulta.estado === 'completada')          return 'resultado'
+  if (consulta.estado === 'completada')           return 'resultado'
   if (consulta.estado === 'esperando_respuestas') return 'preguntas'
   return 'sintomas'
 }
@@ -30,14 +30,12 @@ function determinarEtapa(consulta: Consulta): EtapaConsulta {
 // ─── Componente principal ──────────────────────────────────────────────────────
 
 export default function ConsultaPage() {
-  const [etapa,               setEtapa]               = useState<EtapaConsulta>('sintomas')
-  const [consulta,            setConsulta]             = useState<Consulta | null>(null)
-  const [descripcionOriginal, setDescripcionOriginal]  = useState('')
-  const [cargando,            setCargando]             = useState(false)
-  const [error,               setError]               = useState<string | null>(null)
-  const [consultasRestantes,  setConsultasRestantes]  = useState(5)
-
-  // ─── Handlers ────────────────────────────────────────────────────────────────
+  const [etapa,               setEtapa]              = useState<EtapaConsulta>('sintomas')
+  const [consulta,            setConsulta]           = useState<Consulta | null>(null)
+  const [descripcionOriginal, setDescripcionOriginal] = useState('')
+  const [cargando,            setCargando]           = useState(false)
+  const [error,               setError]              = useState<string | null>(null)
+  const [consultasRestantes,  setConsultasRestantes] = useState(5)
 
   async function handleIniciarConsulta(descripcion: string) {
     setCargando(true)
@@ -45,8 +43,7 @@ export default function ConsultaPage() {
 
     const resultado = await triageService.iniciarConsulta(descripcion)
       .catch((err) => {
-        const mensaje = err.response?.data?.message ?? 'Error al iniciar la consulta. Intentá de nuevo.'
-        setError(mensaje)
+        setError(err.response?.data?.message ?? 'Error al iniciar la consulta. Intentá de nuevo.')
         return null
       })
       .finally(() => setCargando(false))
@@ -61,7 +58,6 @@ export default function ConsultaPage() {
 
   async function handleResponderRonda(respuestas: { id_pr: number; respuesta: string }[]) {
     if (!consulta) return
-
     const rondaActiva = obtenerRondaActiva(consulta)
     if (!rondaActiva) return
 
@@ -73,13 +69,11 @@ export default function ConsultaPage() {
       rondaActiva.id_ronda,
       respuestas,
     ).catch((err) => {
-      const mensaje = err.response?.data?.message ?? 'Error al enviar las respuestas. Intentá de nuevo.'
-      setError(mensaje)
+      setError(err.response?.data?.message ?? 'Error al enviar las respuestas. Intentá de nuevo.')
       return null
     }).finally(() => setCargando(false))
 
     if (!resultado) return
-
     setConsulta(resultado)
     setEtapa(determinarEtapa(resultado))
   }
@@ -109,7 +103,7 @@ export default function ConsultaPage() {
   const indiceActual = PASOS.indexOf(etapa)
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FBFF]">
+    <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
       <main className="flex-1">
@@ -124,7 +118,7 @@ export default function ConsultaPage() {
                     index < indiceActual
                       ? 'bg-green-500 text-white'
                       : index === indiceActual
-                      ? 'bg-[#1B4F72] text-white'
+                      ? 'bg-primary text-white'
                       : 'bg-gray-200 text-gray-400'
                   }`}
                 >
@@ -139,7 +133,7 @@ export default function ConsultaPage() {
 
           {/* Encabezado */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-[#1B4F72]">{TITULOS[etapa]}</h1>
+            <h1 className="text-2xl font-bold text-primary">{TITULOS[etapa]}</h1>
             <p className="text-gray-500 mt-2">{SUBTITULOS[etapa]}</p>
           </div>
 
@@ -152,7 +146,7 @@ export default function ConsultaPage() {
           )}
 
           {/* Contenido según etapa */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="card p-6">
             {etapa === 'sintomas' && (
               <SintomasForm
                 onSubmit={handleIniciarConsulta}
@@ -160,7 +154,6 @@ export default function ConsultaPage() {
                 consultasRestantes={consultasRestantes}
               />
             )}
-
             {etapa === 'preguntas' && consulta && obtenerRondaActiva(consulta) && (
               <PreguntasIA
                 descripcionOriginal={descripcionOriginal}
@@ -170,7 +163,6 @@ export default function ConsultaPage() {
                 onResponder={handleResponderRonda}
               />
             )}
-
             {etapa === 'resultado' && consulta && (
               <ResultadoTriage
                 consulta={consulta}
