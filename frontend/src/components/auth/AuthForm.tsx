@@ -54,7 +54,7 @@ function InputField({ icono, tipo, placeholder, value, onChange, disabled, accio
         disabled={disabled}
         className="w-full border border-gray-200 rounded-xl px-4 py-3 pl-11
                    text-sm text-gray-800 placeholder-gray-400
-                   focus:outline-none focus:ring-2 focus:ring-[#1B4F72] focus:border-transparent
+                   focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
                    disabled:bg-gray-50 disabled:text-gray-400"
       />
       {accionDerecha && (
@@ -145,10 +145,10 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
       {/* Logo */}
       <div className="flex flex-col items-center mb-6">
-        <div className="w-12 h-12 bg-[#1B4F72] rounded-xl flex items-center justify-center mb-2">
+        <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-2">
           <Shield className="w-7 h-7 text-white" />
         </div>
-        <span className="text-xl font-bold text-[#1B4F72]">MED-IA</span>
+        <span className="text-xl font-bold text-primary">MED-IA</span>
       </div>
 
       {/* Tabs */}
@@ -159,7 +159,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
             onClick={() => cambiarTab(t)}
             className={`flex-1 pb-3 text-sm font-medium transition-colors ${
               tab === t
-                ? 'border-b-2 border-[#1B4F72] text-[#1B4F72]'
+                ? 'border-b-2 border-primary text-primary'
                 : 'text-gray-400 hover:text-gray-600'
             }`}
           >
@@ -210,7 +210,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
               type="checkbox"
               checked={recordarme}
               onChange={(e) => setRecordarme(e.target.checked)}
-              className="w-4 h-4 accent-[#1B4F72] rounded"
+              className="w-4 h-4 accent-primary rounded"
             />
             <span className="text-sm text-gray-600">Recordarme</span>
           </label>
@@ -218,8 +218,8 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
           <button
             type="submit"
             disabled={cargando || !correoLogin || !passwordLogin}
-            className="w-full bg-[#2E86C1] text-white font-semibold py-3 rounded-xl
-                       hover:bg-[#1B4F72] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-accent text-white font-semibold py-3 rounded-xl
+                       hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cargando ? (
               <span className="flex items-center justify-center gap-2">
@@ -229,7 +229,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
             ) : 'Ingresar'}
           </button>
 
-          <p className="text-center text-sm text-[#2E86C1] hover:underline cursor-pointer">
+          <p className="text-center text-sm text-accent hover:underline cursor-pointer">
             ¿Olvidaste tu contraseña?
           </p>
 
@@ -329,7 +329,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
               type="checkbox"
               checked={aceptaTerminos}
               onChange={(e) => setAceptaTerminos(e.target.checked)}
-              className="w-4 h-4 accent-[#1B4F72] rounded"
+              className="w-4 h-4 accent-primary rounded"
             />
             <span className="text-sm text-gray-600">Acepto los términos y condiciones</span>
           </label>
@@ -337,8 +337,8 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
           <button
             type="submit"
             disabled={cargando || !nombre || !correoReg || !passwordReg || !confirmarPassword || !aceptaTerminos}
-            className="w-full bg-[#2E86C1] text-white font-semibold py-3 rounded-xl
-                       hover:bg-[#1B4F72] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-accent text-white font-semibold py-3 rounded-xl
+                       hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cargando ? (
               <span className="flex items-center justify-center gap-2">
@@ -374,13 +374,13 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
       <p className="text-center text-sm text-gray-400 mt-6">
         {tab === 'login' ? (
           <>¿No tenés cuenta?{' '}
-            <button onClick={() => cambiarTab('registro')} className="text-[#2E86C1] hover:underline font-medium">
+            <button onClick={() => cambiarTab('registro')} className="text-accent hover:underline font-medium">
               Registrate gratis
             </button>
           </>
         ) : (
           <>¿Ya tenés cuenta?{' '}
-            <button onClick={() => cambiarTab('login')} className="text-[#2E86C1] hover:underline font-medium">
+            <button onClick={() => cambiarTab('login')} className="text-accent hover:underline font-medium">
               Iniciá sesión
             </button>
           </>
