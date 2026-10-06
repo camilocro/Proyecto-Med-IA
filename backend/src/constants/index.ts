@@ -23,3 +23,6 @@ export const URGENCIA_CASO_COMPLEJO = "medio" as const;
 export const MOTIVO_CASO_COMPLEJO =
   "Derivación automática - caso complejo: tus síntomas necesitan una evaluación presencial " +
   "para poder aclararlos. Te recomendamos acudir a Medicina General.";
+
+//
+export const MAX_LONGITUD_RESPUESTA = 500;

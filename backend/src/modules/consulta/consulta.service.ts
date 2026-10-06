@@ -1,6 +1,11 @@
 import { Prisma, NivelUrgencia, TipoDerivacion } from "@prisma/client";
 import prisma from "../../config/prisma";
-import { AppError, badRequest, notFound } from "../../errors/AppError";
+import {
+  AppError,
+  badRequest,
+  conflict,
+  notFound,
+} from "../../errors/AppError";
 import {
   MAX_TRIAGE_ROUNDS,
   ESPECIALIDAD_POR_DEFECTO,
@@ -22,6 +27,17 @@ interface ContextoConsulta {
   idPaciente?: number;
   sesionAnonimo?: string;
   ip: string;
+}
+
+export interface Solicitante {
+  idPaciente?: number;
+  sesionAnonimo: string;
+  esAdmin: boolean;
+}
+
+export interface RespuestaRonda {
+  id_pr: number;
+  respuesta: string;
 }
 
 type EspecialidadCatalogo = { id_especialidad: number; nombre: string };
@@ -55,7 +71,7 @@ const INCLUDE_CONSULTA_COMPLETA = {
   },
 } satisfies Prisma.ConsultaInclude;
 
-// ─── Consultas públicas del módulo ────────────────────────────────────────────
+// ─── Funciones públicas del módulo ────────────────────────────────────────────
 
 export async function getIdPacientePorUsuario(
   idUsuario: number,
@@ -98,46 +114,100 @@ export async function crearConsulta(
     await registrarConsultaAnonima(contexto.sesionAnonimo, contexto.ip);
   }
 
-  return obtenerConsulta(consulta.id_consulta);
+  return cargarConsultaCompleta(consulta.id_consulta);
 }
 
-export async function obtenerConsulta(idConsulta: number) {
-  const consulta = await prisma.consulta.findUnique({
-    where: { id_consulta: idConsulta },
-    include: INCLUDE_CONSULTA_COMPLETA,
-  });
-  if (!consulta) throw notFound("Consulta");
+export async function obtenerConsulta(
+  idConsulta: number,
+  solicitante: Solicitante,
+) {
+  const consulta = await cargarConsultaCompleta(idConsulta);
+  if (!puedeAcceder(consulta, solicitante, { permitirAdmin: true }))
+    throw notFound("Consulta");
   return consulta;
 }
 
 export async function guardarRespuestas(
   idConsulta: number,
   idRonda: number,
-  respuestas: { id_pr: number; respuesta: string }[],
+  respuestas: RespuestaRonda[],
+  solicitante: Solicitante,
 ) {
-  // Verificar que la ronda pertenece a la consulta antes de guardar
-  const ronda = await prisma.rondaPreguntas.findFirst({
-    where: { id_ronda: idRonda, id_consulta: idConsulta },
+  const consulta = await prisma.consulta.findUnique({
+    where: { id_consulta: idConsulta },
+    include: {
+      rondas: {
+        orderBy: { numero_ronda: "desc" },
+        take: 1,
+        include: { preguntas: true },
+      },
+    },
   });
-  if (!ronda) throw notFound("Ronda de preguntas");
+  if (!consulta || !puedeAcceder(consulta, solicitante))
+    throw notFound("Consulta");
+  if (consulta.estado !== "esperando_respuestas") {
+    throw conflict("Esta consulta no está esperando respuestas");
+  }
 
-  await prisma.$transaction(
-    respuestas.map((r) =>
-      prisma.preguntaRespuesta.update({
-        where: { id_pr: r.id_pr },
-        data: { respuesta: r.respuesta },
-      }),
-    ),
-  );
-  return obtenerConsulta(idConsulta);
-  // TODO: llamar iaService para continuar el análisis con las respuestas de esta ronda (Parte 3)
+  const rondaActual = consulta.rondas[0];
+  if (!rondaActual || rondaActual.id_ronda !== idRonda) {
+    throw conflict("Solo puedes responder la ronda de preguntas actual");
+  }
+
+  // Cada pregunta de la ronda debe responderse exactamente una vez
+  const idsEsperados = new Set(rondaActual.preguntas.map((p) => p.id_pr));
+  const idsRecibidos = new Set(respuestas.map((r) => r.id_pr));
+  const coinciden =
+    respuestas.length === idsRecibidos.size &&
+    idsRecibidos.size === idsEsperados.size &&
+    [...idsRecibidos].every((id) => idsEsperados.has(id));
+  if (!coinciden) {
+    throw badRequest(
+      "Debes responder todas las preguntas de la ronda, una vez cada una",
+    );
+  }
+
+  // Bloqueo: si llegan dos envíos a la vez, solo el primero cambia el estado
+  const { count } = await prisma.consulta.updateMany({
+    where: { id_consulta: idConsulta, estado: "esperando_respuestas" },
+    data: { estado: "en_proceso" },
+  });
+  if (count === 0) throw conflict("Esta ronda ya se está procesando");
+
+  try {
+    await prisma.$transaction(
+      respuestas.map((r) =>
+        prisma.preguntaRespuesta.update({
+          where: { id_pr: r.id_pr },
+          data: { respuesta: r.respuesta },
+        }),
+      ),
+    );
+    await procesarAnalisis(idConsulta);
+  } catch (error) {
+    // Las respuestas quedan guardadas: el paciente puede reintentar el envío
+    await prisma.consulta.update({
+      where: { id_consulta: idConsulta },
+      data: { estado: "esperando_respuestas" },
+    });
+    throw error;
+  }
+
+  return cargarConsultaCompleta(idConsulta);
 }
 
-export async function cancelarConsulta(idConsulta: number) {
+export async function cancelarConsulta(
+  idConsulta: number,
+  solicitante: Solicitante,
+) {
   const consulta = await prisma.consulta.findUnique({
     where: { id_consulta: idConsulta },
   });
-  if (!consulta) throw notFound("Consulta");
+  if (!consulta || !puedeAcceder(consulta, solicitante))
+    throw notFound("Consulta");
+  if (consulta.estado === "completada" || consulta.estado === "cancelada") {
+    throw conflict("Esta consulta ya finalizó y no se puede cancelar");
+  }
 
   return prisma.consulta.update({
     where: { id_consulta: idConsulta },
@@ -156,6 +226,29 @@ export async function obtenerHistorialPaciente(idUsuario: number) {
     orderBy: { fecha_consulta: "desc" },
     include: { especialidad_sugerida: true },
   });
+}
+
+// ─── Acceso ───────────────────────────────────────────────────────────────────
+
+async function cargarConsultaCompleta(idConsulta: number) {
+  const consulta = await prisma.consulta.findUnique({
+    where: { id_consulta: idConsulta },
+    include: INCLUDE_CONSULTA_COMPLETA,
+  });
+  if (!consulta) throw notFound("Consulta");
+  return consulta;
+}
+
+/** Solo el dueño de la consulta (paciente o misma sesión anónima) puede acceder a ella. */
+function puedeAcceder(
+  consulta: { id_paciente: number | null; sesion_anonimo: string | null },
+  solicitante: Solicitante,
+  opciones: { permitirAdmin?: boolean } = {},
+): boolean {
+  if (opciones.permitirAdmin && solicitante.esAdmin) return true;
+  if (consulta.id_paciente !== null)
+    return consulta.id_paciente === solicitante.idPaciente;
+  return consulta.sesion_anonimo === solicitante.sesionAnonimo;
 }
 
 // ─── Núcleo del triage ────────────────────────────────────────────────────────

@@ -6,6 +6,8 @@ import {
   guardarRespuestas,
   cancelarConsulta,
   obtenerHistorialPaciente,
+  Solicitante,
+  RespuestaRonda,
 } from "./consulta.service";
 import { ok, AuthenticatedRequest } from "../../shared/types";
 import { badRequest, forbidden } from "../../errors/AppError";
@@ -13,7 +15,10 @@ import { obtenerIdentificadorAnonimo } from "../../shared/sesion";
 import {
   MIN_LONGITUD_DESCRIPCION,
   MAX_LONGITUD_DESCRIPCION,
+  MAX_LONGITUD_RESPUESTA,
 } from "../../constants";
+
+// ─── Validaciones de entrada ──────────────────────────────────────────────────
 
 function validarDescripcion(valor: unknown): string {
   if (typeof valor !== "string" || !valor.trim()) {
@@ -32,6 +37,47 @@ function validarDescripcion(valor: unknown): string {
   }
   return descripcion;
 }
+
+function validarRespuestas(valor: unknown): RespuestaRonda[] {
+  if (!Array.isArray(valor) || valor.length === 0) {
+    throw badRequest("Envía las respuestas de la ronda");
+  }
+  return valor.map((r) => {
+    const id_pr = Number(r?.id_pr);
+    const respuesta =
+      typeof r?.respuesta === "string" ? r.respuesta.trim() : "";
+
+    if (!Number.isInteger(id_pr))
+      throw badRequest("Cada respuesta debe indicar el id_pr de su pregunta");
+    if (!respuesta) throw badRequest("Debes responder todas las preguntas");
+    if (respuesta.length > MAX_LONGITUD_RESPUESTA) {
+      throw badRequest(
+        `Cada respuesta puede tener como máximo ${MAX_LONGITUD_RESPUESTA} caracteres`,
+      );
+    }
+    return { id_pr, respuesta };
+  });
+}
+
+function parsearId(valor: string, nombre: string): number {
+  const id = Number(valor);
+  if (!Number.isInteger(id) || id <= 0) throw badRequest(`${nombre} inválido`);
+  return id;
+}
+
+/** Quién hace la petición: paciente registrado, sesión anónima y si es admin. */
+async function obtenerSolicitante(req: Request): Promise<Solicitante> {
+  const usuario = (req as AuthenticatedRequest).usuario;
+  return {
+    idPaciente: usuario
+      ? await getIdPacientePorUsuario(usuario.id_usuario)
+      : undefined,
+    sesionAnonimo: obtenerIdentificadorAnonimo(req),
+    esAdmin: usuario?.rol === "administrador",
+  };
+}
+
+// ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function iniciar(req: Request, res: Response) {
   const descripcion = validarDescripcion(req.body?.descripcion_sintomas);
@@ -53,23 +99,34 @@ export async function iniciar(req: Request, res: Response) {
 }
 
 export async function obtener(req: Request, res: Response) {
-  const consulta = await obtenerConsulta(parseInt(req.params.id));
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const consulta = await obtenerConsulta(
+    idConsulta,
+    await obtenerSolicitante(req),
+  );
   res.json(ok(consulta));
 }
 
 export async function responderRonda(req: Request, res: Response) {
-  const idConsulta = parseInt(req.params.id);
-  const idRonda = parseInt(req.params.idRonda);
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const idRonda = parsearId(req.params.idRonda, "ID de ronda");
+  const respuestas = validarRespuestas(req.body?.respuestas);
+
   const consulta = await guardarRespuestas(
     idConsulta,
     idRonda,
-    req.body.respuestas,
+    respuestas,
+    await obtenerSolicitante(req),
   );
   res.json(ok(consulta));
 }
 
 export async function cancelar(req: Request, res: Response) {
-  const consulta = await cancelarConsulta(parseInt(req.params.id));
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const consulta = await cancelarConsulta(
+    idConsulta,
+    await obtenerSolicitante(req),
+  );
   res.json(ok(consulta));
 }
 
