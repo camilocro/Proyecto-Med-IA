@@ -8,6 +8,7 @@ import {
 } from "../../errors/AppError";
 import {
   MAX_TRIAGE_ROUNDS,
+  MAX_MEDICOS_SUGERIDOS,
   ESPECIALIDAD_POR_DEFECTO,
   URGENCIA_CASO_COMPLEJO,
   MOTIVO_CASO_COMPLEJO,
@@ -340,10 +341,22 @@ async function finalizarConsulta(
   idConsulta: number,
   datos: DatosVeredicto,
 ): Promise<void> {
+  const medicos = await buscarMedicosDisponibles(
+    datos.especialidad.id_especialidad,
+  );
+
   await prisma.$transaction([
     prisma.sintomaExtraido.deleteMany({ where: { id_consulta: idConsulta } }),
     prisma.sintomaExtraido.createMany({
       data: datos.sintomas.map((s) => ({ id_consulta: idConsulta, ...s })),
+    }),
+    prisma.medicoSugerido.deleteMany({ where: { id_consulta: idConsulta } }),
+    prisma.medicoSugerido.createMany({
+      data: medicos.map((m, i) => ({
+        id_consulta: idConsulta,
+        id_medico: m.id_medico,
+        orden_sugerencia: i + 1,
+      })),
     }),
     prisma.consulta.update({
       where: { id_consulta: idConsulta },
@@ -359,7 +372,21 @@ async function finalizarConsulta(
       },
     }),
   ]);
-  // Parte 4: buscar médicos disponibles de la especialidad y guardarlos en MedicoSugerido
+}
+
+/** RN-005 / HU-017: solo médicos de la especialidad, disponibles y con cuenta y centro activos. */
+async function buscarMedicosDisponibles(idEspecialidad: number) {
+  return prisma.medico.findMany({
+    where: {
+      id_especialidad: idEspecialidad,
+      disponible: true,
+      usuario: { activo: true },
+      centro_salud: { activo: true },
+    },
+    orderBy: { created_at: "asc" },
+    take: MAX_MEDICOS_SUGERIDOS,
+    select: { id_medico: true },
+  });
 }
 
 async function crearRonda(
