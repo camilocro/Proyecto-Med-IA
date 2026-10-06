@@ -40,7 +40,7 @@ export default function Navbar() {
   }
 
   return (
-    <header className="bg-[#1B4F72] text-white shadow-md">
+    <header className="bg-primary text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-6">
 
         {/* Logo */}
@@ -53,7 +53,6 @@ export default function Navbar() {
         <nav className="flex items-center gap-1">
           {ENLACES_NAV.map(({ href, label }) => {
             const esActivo = pathname === href
-
             return (
               <Link
                 key={href}
@@ -88,16 +87,13 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link
-                href="/login"
-                className="text-white/80 hover:text-white text-sm transition-colors"
-              >
+              <Link href="/login" className="text-white/80 hover:text-white text-sm transition-colors">
                 Iniciar Sesión
               </Link>
               <Link
                 href="/registro"
-                className="bg-white text-[#1B4F72] text-sm font-semibold px-4 py-1.5
-                           rounded-lg hover:bg-[#D6EAF8] transition-colors"
+                className="bg-white text-primary text-sm font-semibold px-4 py-1.5
+                           rounded-lg hover:bg-light transition-colors"
               >
                 Registrarse
               </Link>
