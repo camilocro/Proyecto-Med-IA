@@ -7,11 +7,17 @@ import { useAuth }     from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
 import { Shield, LogOut } from 'lucide-react'
 
-const ENLACES_NAV = [
+// ── Constantes ──────────────────────────────────────────────────────────────────
+
+const ENLACES_BASE = [
   { href: '/',          label: 'Inicio'    },
   { href: '/consulta',  label: 'Consulta'  },
   { href: '/historial', label: 'Historial' },
 ]
+
+const ENLACE_ADMIN = { href: '/admin', label: 'Admin' }
+
+// ── Avatar con iniciales ────────────────────────────────────────────────────────
 
 function InicialAvatar({ nombre }: { nombre: string }) {
   const iniciales = nombre
@@ -28,10 +34,14 @@ function InicialAvatar({ nombre }: { nombre: string }) {
   )
 }
 
+// ── Componente principal ────────────────────────────────────────────────────────
+
 export default function Navbar() {
-  const { usuario, cerrarSesion } = useAuth()
-  const router                    = useRouter()
-  const pathname                  = usePathname()
+  const { usuario, esAdmin, cerrarSesion } = useAuth()
+  const router   = useRouter()
+  const pathname = usePathname()
+
+  const enlaces = [...ENLACES_BASE, ...(esAdmin ? [ENLACE_ADMIN] : [])]
 
   async function handleLogout() {
     await authService.logout().catch(() => {})
@@ -51,7 +61,7 @@ export default function Navbar() {
 
         {/* Navegación central */}
         <nav className="flex items-center gap-1">
-          {ENLACES_NAV.map(({ href, label }) => {
+          {enlaces.map(({ href, label }) => {
             const esActivo = pathname === href
             return (
               <Link
@@ -87,7 +97,10 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/login" className="text-white/80 hover:text-white text-sm transition-colors">
+              <Link
+                href="/login"
+                className="text-white/80 hover:text-white text-sm transition-colors"
+              >
                 Iniciar Sesión
               </Link>
               <Link
