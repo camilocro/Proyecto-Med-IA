@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter }           from 'next/navigation'
-import { useAuth }             from '@/hooks/useAuth'
+import React, { useEffect, useState } from 'react'
+import { useRouter }                  from 'next/navigation'
+import { useAuth }                    from '@/hooks/useAuth'
 import {
   adminService,
   DashboardMetrics,
   ConsultaReciente,
+  UsuarioAdmin,
 } from '@/services/admin.service'
-import StatsCard from '@/components/admin/StatsCard'
-import Navbar    from '@/components/layout/Navbar'
+import StatsCard     from '@/components/admin/StatsCard'
+import UsuariosTable from '@/components/admin/UsuariosTable'
+import Navbar        from '@/components/layout/Navbar'
 import {
   ClipboardList,
   AlertTriangle,
@@ -18,8 +20,10 @@ import {
   RefreshCw,
   Clock,
   ShieldAlert,
+  LayoutDashboard,
 } from 'lucide-react'
 
+// ── Utilidades ─────────────────────────────────────────────────────────────────
 
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString('es-BO', {
@@ -51,9 +55,25 @@ function BadgeUrgencia({ nivel }: { nivel: string | null }) {
   )
 }
 
+// ── Tipos ──────────────────────────────────────────────────────────────────────
+
+type Tab = 'dashboard' | 'usuarios'
+
+interface TabConfig {
+  id:    Tab
+  label: string
+  Icono: React.ElementType
+}
+
+const TABS: TabConfig[] = [
+  { id: 'dashboard', label: 'Dashboard', Icono: LayoutDashboard },
+  { id: 'usuarios',  label: 'Usuarios',  Icono: Users           },
+]
+
 interface EstadoPagina {
   metricas:    DashboardMetrics | null
   consultas:   ConsultaReciente[]
+  usuarios:    UsuarioAdmin[]
   cargando:    boolean
   error:       string | null
   actualizado: Date | null
@@ -62,15 +82,19 @@ interface EstadoPagina {
 const ESTADO_INICIAL: EstadoPagina = {
   metricas:    null,
   consultas:   [],
+  usuarios:    [],
   cargando:    true,
   error:       null,
   actualizado: null,
 }
 
+// ── Componente principal ────────────────────────────────────────────────────────
+
 export default function AdminPage() {
   const { usuario, cargando: cargandoAuth, esAdmin } = useAuth()
   const router = useRouter()
 
+  const [tab,    setTab]    = useState<Tab>('dashboard')
   const [estado, setEstado] = useState<EstadoPagina>(ESTADO_INICIAL)
 
   useEffect(() => {
@@ -81,15 +105,15 @@ export default function AdminPage() {
 
   async function cargarDatos() {
     setEstado((prev) => ({ ...prev, cargando: true, error: null }))
-
-    const [metricas, consultas] = await Promise.all([
+    const [metricas, consultas, usuarios] = await Promise.all([
       adminService.getDashboard(),
       adminService.getConsultasRecientes(),
+      adminService.getUsuarios(),
     ])
-
     setEstado({
       metricas,
       consultas,
+      usuarios,
       cargando:    false,
       error:       null,
       actualizado: new Date(),
@@ -97,10 +121,10 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!cargandoAuth && esAdmin) {
-      cargarDatos()
-    }
+    if (!cargandoAuth && esAdmin) cargarDatos()
   }, [cargandoAuth, esAdmin])
+
+  // ── Pantalla de carga ───────────────────────────────────────────────
 
   if (cargandoAuth) {
     return (
@@ -121,7 +145,9 @@ export default function AdminPage() {
 
   if (!esAdmin) return null
 
-  const { metricas, consultas, cargando, error, actualizado } = estado
+  const { metricas, consultas, usuarios, cargando, error, actualizado } = estado
+
+  // ── Vista principal ─────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -130,7 +156,7 @@ export default function AdminPage() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">
 
         {/* Encabezado */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-primary rounded-xl flex items-center justify-center">
               <ShieldAlert className="w-6 h-6 text-white" />
@@ -144,7 +170,6 @@ export default function AdminPage() {
               </p>
             </div>
           </div>
-
           <button
             onClick={cargarDatos}
             disabled={cargando}
@@ -155,6 +180,24 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
+          {TABS.map(({ id, label, Icono }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === id
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Icono className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Error */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
@@ -162,125 +205,157 @@ export default function AdminPage() {
             <div>
               <p className="text-sm font-medium text-red-700">Error al cargar datos</p>
               <p className="text-sm text-red-600 mt-0.5">{error}</p>
-              <button
-                onClick={cargarDatos}
-                className="text-sm text-red-700 underline mt-1 hover:no-underline"
-              >
+              <button onClick={cargarDatos} className="text-sm text-red-700 underline mt-1 hover:no-underline">
                 Reintentar
               </button>
             </div>
           </div>
         )}
 
-        {/* Tarjetas de métricas */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-          <StatsCard
-            titulo="Consultas hoy"
-            valor={metricas?.consultasHoy ?? 0}
-            icono={ClipboardList}
-            color="azul"
-            cargando={cargando && !metricas}
-          />
-          <StatsCard
-            titulo="Urgencias altas hoy"
-            valor={metricas?.urgenciasAltas ?? 0}
-            icono={AlertTriangle}
-            color="rojo"
-            cargando={cargando && !metricas}
-          />
-          <StatsCard
-            titulo="Médicos activos"
-            valor={metricas?.medicosActivos ?? 0}
-            icono={UserCheck}
-            color="verde"
-            cargando={cargando && !metricas}
-          />
-          <StatsCard
-            titulo="Usuarios registrados"
-            valor={metricas?.usuariosRegistrados ?? 0}
-            icono={Users}
-            color="amarillo"
-            cargando={cargando && !metricas}
-          />
-        </section>
+        {/* ── TAB: DASHBOARD ─────────────────────────────────────── */}
+        {tab === 'dashboard' && (
+          <>
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+              <StatsCard
+                titulo="Consultas hoy"
+                valor={metricas?.consultasHoy ?? 0}
+                icono={ClipboardList}
+                color="azul"
+                cargando={cargando && !metricas}
+              />
+              <StatsCard
+                titulo="Urgencias altas hoy"
+                valor={metricas?.urgenciasAltas ?? 0}
+                icono={AlertTriangle}
+                color="rojo"
+                cargando={cargando && !metricas}
+              />
+              <StatsCard
+                titulo="Médicos activos"
+                valor={metricas?.medicosActivos ?? 0}
+                icono={UserCheck}
+                color="verde"
+                cargando={cargando && !metricas}
+              />
+              <StatsCard
+                titulo="Usuarios registrados"
+                valor={metricas?.usuariosRegistrados ?? 0}
+                icono={Users}
+                color="amarillo"
+                cargando={cargando && !metricas}
+              />
+            </section>
 
-        {/* Consultas recientes */}
-        <section className="card overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-gray-400" />
-              <h2 className="text-base font-semibold text-gray-800">Consultas recientes</h2>
-            </div>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-              Últimas {consultas.length}
-            </span>
-          </div>
-
-          {cargando && consultas.length === 0 ? (
-            <div className="divide-y divide-gray-50">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="px-6 py-4 flex items-center gap-4 animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-24" />
-                  <div className="h-4 bg-gray-200 rounded flex-1" />
-                  <div className="h-6 bg-gray-200 rounded w-16" />
-                  <div className="h-4 bg-gray-200 rounded w-32" />
+            <section className="card overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-gray-400" />
+                  <h2 className="text-base font-semibold text-gray-800">Consultas recientes</h2>
                 </div>
-              ))}
-            </div>
-          ) : consultas.length === 0 ? (
-            <div className="px-6 py-12 text-center text-gray-400">
-              <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm">No hay consultas registradas todavía.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px]">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                  <tr>
-                    <th className="px-6 py-3 text-left font-medium">Paciente</th>
-                    <th className="px-6 py-3 text-left font-medium">Síntomas</th>
-                    <th className="px-6 py-3 text-left font-medium">Urgencia</th>
-                    <th className="px-6 py-3 text-left font-medium">Especialidad</th>
-                    <th className="px-6 py-3 text-left font-medium">Fecha</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {consultas.map((consulta) => (
-                    <tr
-                      key={consulta.id_consulta}
-                      className="hover:bg-gray-50/60 transition-colors"
-                    >
-                      <td className="px-6 py-4 text-sm font-medium text-gray-800 whitespace-nowrap">
-                        {consulta.paciente?.usuario?.nombre ?? 'Anónimo'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px]">
-                        <span className="truncate block">
-                          {consulta.descripcion_sintomas.length > 60
-                            ? `${consulta.descripcion_sintomas.slice(0, 60)}…`
-                            : consulta.descripcion_sintomas}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <BadgeUrgencia nivel={consulta.nivel_urgencia} />
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
-                        {consulta.especialidad_sugerida?.nombre ?? (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-gray-400 whitespace-nowrap">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                          {formatearFecha(consulta.fecha_consulta)}
-                        </span>
-                      </td>
-                    </tr>
+                <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+                  Últimas {consultas.length}
+                </span>
+              </div>
+
+              {cargando && consultas.length === 0 ? (
+                <div className="divide-y divide-gray-50">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="px-6 py-4 flex items-center gap-4 animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-24" />
+                      <div className="h-4 bg-gray-200 rounded flex-1" />
+                      <div className="h-6 bg-gray-200 rounded w-16" />
+                      <div className="h-4 bg-gray-200 rounded w-32" />
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              ) : consultas.length === 0 ? (
+                <div className="px-6 py-12 text-center text-gray-400">
+                  <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">No hay consultas registradas todavía.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px]">
+                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                      <tr>
+                        <th className="px-6 py-3 text-left font-medium">Paciente</th>
+                        <th className="px-6 py-3 text-left font-medium">Síntomas</th>
+                        <th className="px-6 py-3 text-left font-medium">Urgencia</th>
+                        <th className="px-6 py-3 text-left font-medium">Especialidad</th>
+                        <th className="px-6 py-3 text-left font-medium">Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {consultas.map((consulta) => (
+                        <tr key={consulta.id_consulta} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-6 py-4 text-sm font-medium text-gray-800 whitespace-nowrap">
+                            {consulta.paciente?.usuario?.nombre ?? 'Anónimo'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px]">
+                            <span className="truncate block">
+                              {consulta.descripcion_sintomas.length > 60
+                                ? `${consulta.descripcion_sintomas.slice(0, 60)}…`
+                                : consulta.descripcion_sintomas}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <BadgeUrgencia nivel={consulta.nivel_urgencia} />
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                            {consulta.especialidad_sugerida?.nombre ?? (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-xs text-gray-400 whitespace-nowrap">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                              {formatearFecha(consulta.fecha_consulta)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {/* ── TAB: USUARIOS ──────────────────────────────────────── */}
+        {tab === 'usuarios' && (
+          <section className="card overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-gray-400" />
+                <h2 className="text-base font-semibold text-gray-800">Usuarios del sistema</h2>
+              </div>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+                {usuarios.length} registrados
+              </span>
             </div>
-          )}
-        </section>
+
+            {cargando && usuarios.length === 0 ? (
+              <div className="divide-y divide-gray-50">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="px-6 py-4 flex items-center gap-4 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-32" />
+                    <div className="h-4 bg-gray-200 rounded flex-1" />
+                    <div className="h-6 bg-gray-200 rounded w-16" />
+                    <div className="h-8 bg-gray-200 rounded w-20" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <UsuariosTable
+                usuarios={usuarios}
+                onUsuariosChange={(actualizados) =>
+                  setEstado((prev) => ({ ...prev, usuarios: actualizados }))
+                }
+              />
+            )}
+          </section>
+        )}
 
       </main>
 
