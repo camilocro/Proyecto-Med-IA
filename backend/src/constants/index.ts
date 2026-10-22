@@ -31,3 +31,8 @@ export const MAX_MEDICOS_SUGERIDOS = 5;
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 export const MAX_CONSULTAS_RECIENTES_ADMIN = 20;
+
+// ─── Perfil ───────────────────────────────────────────────────────────────────
+export const MIN_LONGITUD_NOMBRE = 2;
+export const MAX_LONGITUD_NOMBRE = 100;
+export const MIN_LONGITUD_PASSWORD = 8;
