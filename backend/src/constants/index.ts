@@ -28,3 +28,6 @@ export const MOTIVO_CASO_COMPLEJO =
 export const MAX_LONGITUD_RESPUESTA = 500;
 
 export const MAX_MEDICOS_SUGERIDOS = 5;
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+export const MAX_CONSULTAS_RECIENTES_ADMIN = 20;
