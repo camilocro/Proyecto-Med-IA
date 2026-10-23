@@ -7,10 +7,11 @@ export const MAX_TRIAGE_ROUNDS = 3;
 export const CONFIG_KEY_DAILY_LIMIT = "limite_consultas_diarias";
 // ─── IA ───────────────────────────────────────────────────────────────────────
 export const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-export const IA_TIMEOUT_MS = 30_000;
-export const IA_MAX_REINTENTOS_RED = 2;
+export const IA_TIMEOUT_MS = 15_000;
+export const IA_MAX_REINTENTOS_RED = 1;
 export const IA_MAX_INTENTOS_FORMATO = 2;
 export const MAX_PREGUNTAS_POR_RONDA = 5;
+export const PREGUNTAS_RECOMENDADAS = 3; // lo que se le pide a la IA; MAX_PREGUNTAS_POR_RONDA es el tope duro
 export const ESPECIALIDAD_POR_DEFECTO = "Medicina General";
 // Modo simulado (para pruebas sin consumir la API real de OpenAI)
 export const IA_MODO_SIMULADO = process.env.IA_MODO_SIMULADO === "true";
