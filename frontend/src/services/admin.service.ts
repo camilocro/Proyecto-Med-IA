@@ -1,6 +1,8 @@
 import apiClient from '@/lib/apiClient'
 import { ApiResponse } from '@/types'
 
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+
 export interface DashboardMetrics {
   consultasHoy:        number
   urgenciasAltas:      number
@@ -18,6 +20,18 @@ export interface ConsultaReciente {
   paciente?:              { usuario: { nombre: string } }
 }
 
+/** Lo que devuelve GET /admin/usuarios (nunca incluye password_hash) */
+export interface UsuarioAdmin {
+  id_usuario: number
+  nombre:     string
+  correo:     string
+  rol:        string
+  activo:     boolean
+  created_at: string
+}
+
+// ── Servicio ──────────────────────────────────────────────────────────────────
+
 export const adminService = {
   getDashboard(): Promise<DashboardMetrics> {
     return apiClient
@@ -30,5 +44,17 @@ export const adminService = {
       .get<ApiResponse<ConsultaReciente[]>>('/admin/consultas')
       .then((res) => res.data.data)
       .catch(() => [])
+  },
+
+  getUsuarios(): Promise<UsuarioAdmin[]> {
+    return apiClient
+      .get<ApiResponse<UsuarioAdmin[]>>('/admin/usuarios')
+      .then((res) => res.data.data)
+  },
+
+  cambiarEstadoUsuario(id: number, activo: boolean): Promise<UsuarioAdmin> {
+    return apiClient
+      .patch<ApiResponse<UsuarioAdmin>>(`/admin/usuarios/${id}/estado`, { activo })
+      .then((res) => res.data.data)
   },
 }
