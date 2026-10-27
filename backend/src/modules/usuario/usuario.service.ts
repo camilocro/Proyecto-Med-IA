@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import prisma from "../../config/prisma";
-import { badRequest, notFound, unauthorized } from "../../errors/AppError";
+import { badRequest, notFound } from "../../errors/AppError";
 import { SALT_ROUNDS } from "../../constants";
 
 const SELECT_PERFIL = {
@@ -50,7 +50,9 @@ export async function actualizarPerfil(
       cambios.contrasenaActual,
       usuario.password_hash,
     );
-    if (!actualValida) throw unauthorized("La contraseña actual es incorrecta");
+    // 400 y no 401: el usuario SÍ está autenticado; un 401 hacía que el frontend
+    // cerrara la sesión y redirigiera al login al equivocarse de contraseña.
+    if (!actualValida) throw badRequest("La contraseña actual es incorrecta");
 
     datos.password_hash = await bcrypt.hash(cambios.contrasena, SALT_ROUNDS);
   }
