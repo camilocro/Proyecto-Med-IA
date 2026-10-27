@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import prisma from "../../config/prisma";
-import { conflict, unauthorized } from "../../errors/AppError";
+import { conflict, forbidden, unauthorized } from "../../errors/AppError";
 import {
   SALT_ROUNDS,
   JWT_EXPIRES_IN,
@@ -18,6 +18,27 @@ interface RegisterInput {
 interface LoginInput {
   correo: string;
   password: string;
+}
+
+// Datos públicos del usuario que recibe el frontend (coinciden con el tipo Usuario del cliente)
+function usuarioPublico(usuario: {
+  id_usuario: number;
+  nombre: string;
+  correo: string;
+  rol: string;
+  activo: boolean;
+  verificado: boolean;
+  created_at: Date;
+}) {
+  return {
+    id_usuario: usuario.id_usuario,
+    nombre: usuario.nombre,
+    correo: usuario.correo,
+    rol: usuario.rol,
+    activo: usuario.activo,
+    verificado: usuario.verificado,
+    created_at: usuario.created_at,
+  };
 }
 
 function signToken(payload: {
@@ -40,40 +61,30 @@ export async function registerUsuario(input: RegisterInput) {
 
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
+  // Usuario y perfil de paciente se crean juntos: si falla uno, no queda un usuario huérfano
   const usuario = await prisma.usuario.create({
     data: {
       nombre: input.nombre,
       correo: input.correo,
       password_hash: passwordHash,
       rol: "paciente",
+      paciente: { create: {} },
     },
   });
-
-  // Crear perfil de paciente automáticamente
-  await prisma.paciente.create({ data: { id_usuario: usuario.id_usuario } });
 
   const token = signToken({
     id_usuario: usuario.id_usuario,
     correo: usuario.correo,
     rol: usuario.rol,
   });
-  return {
-    token,
-    usuario: {
-      id_usuario: usuario.id_usuario,
-      nombre: usuario.nombre,
-      correo: usuario.correo,
-      rol: usuario.rol,
-      created_at: usuario.created_at,
-    },
-  };
+  return { token, usuario: usuarioPublico(usuario) };
 }
 
 export async function loginUsuario(input: LoginInput) {
   const usuario = await prisma.usuario.findUnique({
     where: { correo: input.correo },
   });
-  if (!usuario || !usuario.activo) throw unauthorized("Credenciales inválidas");
+  if (!usuario) throw unauthorized("Credenciales inválidas");
 
   if (usuario.bloqueado_hasta && usuario.bloqueado_hasta > new Date()) {
     throw unauthorized(
@@ -103,6 +114,13 @@ export async function loginUsuario(input: LoginInput) {
     throw unauthorized("Credenciales inválidas");
   }
 
+  // HU-002 CA-5: con credenciales correctas, una cuenta desactivada recibe un aviso específico
+  if (!usuario.activo) {
+    throw forbidden(
+      "Tu cuenta está desactivada. Comunícate con el administrador para reactivarla.",
+    );
+  }
+
   // Reset intentos al hacer login exitoso
   await prisma.usuario.update({
     where: { id_usuario: usuario.id_usuario },
@@ -114,14 +132,5 @@ export async function loginUsuario(input: LoginInput) {
     correo: usuario.correo,
     rol: usuario.rol,
   });
-  return {
-    token,
-    usuario: {
-      id_usuario: usuario.id_usuario,
-      nombre: usuario.nombre,
-      correo: usuario.correo,
-      rol: usuario.rol,
-      created_at: usuario.created_at,
-    },
-  };
+  return { token, usuario: usuarioPublico(usuario) };
 }
