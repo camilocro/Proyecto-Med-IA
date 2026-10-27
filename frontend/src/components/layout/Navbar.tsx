@@ -1,17 +1,26 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link            from 'next/link'
 import { useRouter }   from 'next/navigation'
 import { usePathname } from 'next/navigation'
 import { useAuth }     from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
-import { Shield, LogOut } from 'lucide-react'
+import { vieneDeRegistroExitoso } from '@/lib/flujoAuth'
+import { Shield, LogOut, UserCircle, Menu, X } from 'lucide-react'
 
-const ENLACES_NAV = [
+// ── Constantes ──────────────────────────────────────────────────────────────────
+
+const ENLACES_BASE = [
   { href: '/',          label: 'Inicio'    },
   { href: '/consulta',  label: 'Consulta'  },
   { href: '/historial', label: 'Historial' },
 ]
+
+const ENLACE_ADMIN  = { href: '/admin',  label: 'Admin'     }
+const ENLACE_PERFIL = { href: '/perfil', label: 'Mi Perfil' }
+
+// ── Avatar con iniciales ────────────────────────────────────────────────────────
 
 function InicialAvatar({ nombre }: { nombre: string }) {
   const iniciales = nombre
@@ -28,10 +37,31 @@ function InicialAvatar({ nombre }: { nombre: string }) {
   )
 }
 
+// ── Componente principal ────────────────────────────────────────────────────────
+
 export default function Navbar() {
-  const { usuario, cerrarSesion } = useAuth()
-  const router                    = useRouter()
-  const pathname                  = usePathname()
+  const { usuario, esAdmin, estaAutenticado, cerrarSesion } = useAuth()
+  const router   = useRouter()
+  const pathname = usePathname()
+
+  // Tras registrarse, el flujo definido solo ofrece iniciar sesión (HU-001 CA-5)
+  const [ocultarRegistro, setOcultarRegistro] = useState(false)
+  useEffect(() => {
+    setOcultarRegistro(vieneDeRegistroExitoso())
+  }, [pathname])
+
+  // Menú desplegable para celular y tablet (en escritorio la barra se ve completa)
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  useEffect(() => {
+    setMenuAbierto(false)
+  }, [pathname])
+
+  // Construye los enlaces según el rol
+  const enlaces = [
+    ...ENLACES_BASE,
+    ...(estaAutenticado ? [ENLACE_PERFIL] : []),
+    ...(esAdmin         ? [ENLACE_ADMIN]  : []),
+  ]
 
   async function handleLogout() {
     await authService.logout().catch(() => {})
@@ -49,15 +79,15 @@ export default function Navbar() {
           MED-IA
         </Link>
 
-        {/* Navegación central */}
-        <nav className="flex items-center gap-1">
-          {ENLACES_NAV.map(({ href, label }) => {
+        {/* Navegación central (desde 1024 px; en pantallas menores va en el menú desplegable) */}
+        <nav className="hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto">
+          {enlaces.map(({ href, label }) => {
             const esActivo = pathname === href
             return (
               <Link
                 key={href}
                 href={href}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
                   esActivo
                     ? 'bg-white/20 text-white'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
@@ -73,8 +103,14 @@ export default function Navbar() {
         <div className="flex items-center gap-3 flex-shrink-0">
           {usuario ? (
             <>
-              <InicialAvatar nombre={usuario.nombre} />
-              <span className="text-sm font-medium hidden sm:block">{usuario.nombre}</span>
+              <Link
+                href="/perfil"
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                title="Ver mi perfil"
+              >
+                <InicialAvatar nombre={usuario.nombre} />
+                <span className="text-sm font-medium hidden sm:block">{usuario.nombre}</span>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 text-white/80 hover:text-white
@@ -87,21 +123,69 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/login" className="text-white/80 hover:text-white text-sm transition-colors">
+              <Link
+                href="/login"
+                className="text-white/80 hover:text-white text-sm transition-colors"
+              >
                 Iniciar Sesión
               </Link>
-              <Link
-                href="/registro"
-                className="bg-white text-primary text-sm font-semibold px-4 py-1.5
-                           rounded-lg hover:bg-light transition-colors"
-              >
-                Registrarse
-              </Link>
+              {!ocultarRegistro && (
+                <Link
+                  href="/registro"
+                  className="hidden sm:inline-block bg-white text-primary text-sm font-semibold px-4 py-1.5
+                             rounded-lg hover:bg-light transition-colors"
+                >
+                  Registrarse
+                </Link>
+              )}
             </>
           )}
+
+          {/* Botón del menú (solo celular y tablet) */}
+          <button
+            type="button"
+            onClick={() => setMenuAbierto((abierto) => !abierto)}
+            aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={menuAbierto}
+            aria-controls="menu-movil"
+            className="lg:hidden p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            {menuAbierto ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
 
       </div>
+
+      {/* Menú desplegable (solo celular y tablet) */}
+      {menuAbierto && (
+        <nav id="menu-movil" className="lg:hidden border-t border-white/10 px-4 py-3 space-y-1">
+          {enlaces.map(({ href, label }) => {
+            const esActivo = pathname === href
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  esActivo
+                    ? 'bg-white/20 text-white'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {label}
+              </Link>
+            )
+          })}
+          {!usuario && !ocultarRegistro && (
+            <Link
+              href="/registro"
+              className="sm:hidden block text-center bg-white text-primary text-sm font-semibold px-4 py-2.5
+                         rounded-lg hover:bg-light transition-colors mt-2"
+            >
+              Registrarse
+            </Link>
+          )}
+        </nav>
+      )}
     </header>
   )
 }
