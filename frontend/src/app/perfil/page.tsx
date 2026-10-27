@@ -19,6 +19,11 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 
+// Mismas reglas que valida el backend (usuario.controller.ts)
+const MIN_LONGITUD_NOMBRE   = 2
+const MAX_LONGITUD_NOMBRE   = 100
+const MIN_LONGITUD_PASSWORD = 8
+
 // ── Badge de rol ──────────────────────────────────────────────────────────────
 
 const ROL_CONFIG: Record<string, { label: string; clase: string }> = {
@@ -89,6 +94,7 @@ export default function PerfilPage() {
   // ── Estado del perfil ──────────────────────────────────────────────────────
   const [perfil,         setPerfil]         = useState<PerfilUsuario | null>(null)
   const [cargandoPerfil, setCargandoPerfil] = useState(true)
+  const [errorPerfil,    setErrorPerfil]    = useState<string | null>(null)
 
   // ── Estado del formulario de nombre ───────────────────────────────────────
   const [nombre,            setNombre]            = useState('')
@@ -110,10 +116,17 @@ export default function PerfilPage() {
   // ── Cargar perfil desde el backend ────────────────────────────────────────
   const cargarPerfil = useCallback(async () => {
     setCargandoPerfil(true)
-    const datos = await perfilService.getPerfil()
-    setPerfil(datos)
-    setNombre(datos.nombre)
-    setCargandoPerfil(false)
+    setErrorPerfil(null)
+    try {
+      const datos = await perfilService.getPerfil()
+      setPerfil(datos)
+      setNombre(datos.nombre)
+    } catch {
+      // Sin esto la página quedaba cargando indefinidamente si el backend fallaba
+      setErrorPerfil('No se pudo cargar tu perfil. Verificá tu conexión e intentá de nuevo.')
+    } finally {
+      setCargandoPerfil(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -126,8 +139,11 @@ export default function PerfilPage() {
     setAlertaNombre(null)
 
     const limpio = nombre.trim()
-    if (limpio.length < 3 || limpio.length > 100) {
-      setAlertaNombre({ tipo: 'error', mensaje: 'El nombre debe tener entre 3 y 100 caracteres.' })
+    if (limpio.length < MIN_LONGITUD_NOMBRE || limpio.length > MAX_LONGITUD_NOMBRE) {
+      setAlertaNombre({
+        tipo:    'error',
+        mensaje: `El nombre debe tener entre ${MIN_LONGITUD_NOMBRE} y ${MAX_LONGITUD_NOMBRE} caracteres.`,
+      })
       return
     }
     if (limpio === perfil?.nombre) {
@@ -164,8 +180,12 @@ export default function PerfilPage() {
       setAlertaPassword({ tipo: 'error', mensaje: 'Ingresa tu contraseña actual.' })
       return
     }
-    if (contrasenaNueva.length < 6) {
-      setAlertaPassword({ tipo: 'error', mensaje: 'La nueva contraseña debe tener al menos 6 caracteres.' })
+    // El backend exige mínimo 8: con 6 el formulario aceptaba contraseñas que luego eran rechazadas
+    if (contrasenaNueva.length < MIN_LONGITUD_PASSWORD) {
+      setAlertaPassword({
+        tipo:    'error',
+        mensaje: `La nueva contraseña debe tener al menos ${MIN_LONGITUD_PASSWORD} caracteres.`,
+      })
       return
     }
     if (!/[A-Za-z]/.test(contrasenaNueva) || !/\d/.test(contrasenaNueva)) {
@@ -208,7 +228,21 @@ export default function PerfilPage() {
     )
   }
 
-  if (!perfil) return null
+  if (errorPerfil || !perfil) {
+    return (
+      <>
+        <Navbar />
+        <main className="flex-1 bg-gray-50 py-10 px-4">
+          <div className="max-w-3xl mx-auto space-y-4">
+            <Alerta tipo="error" mensaje={errorPerfil ?? 'No se pudo cargar tu perfil.'} />
+            <button type="button" onClick={cargarPerfil} className="btn-primary py-2.5 px-6">
+              Reintentar
+            </button>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   const fechaRegistro = new Date(perfil.created_at).toLocaleDateString('es-BO', {
     day: 'numeric', month: 'long', year: 'numeric',
@@ -291,7 +325,7 @@ export default function PerfilPage() {
               </div>
             </div>
 
-            <form onSubmit={handleGuardarNombre} className="space-y-4">
+            <form onSubmit={handleGuardarNombre} noValidate className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Nombre completo
@@ -299,7 +333,7 @@ export default function PerfilPage() {
                 <input
                   type="text"
                   value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
+                  onChange={(e) => { setNombre(e.target.value); setAlertaNombre(null) }}
                   placeholder="Tu nombre completo"
                   className="input-field"
                   maxLength={100}
@@ -334,7 +368,7 @@ export default function PerfilPage() {
               </div>
             </div>
 
-            <form onSubmit={handleCambiarPassword} className="space-y-4">
+            <form onSubmit={handleCambiarPassword} noValidate className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contraseña actual
@@ -342,7 +376,7 @@ export default function PerfilPage() {
                 <input
                   type="password"
                   value={contrasenaActual}
-                  onChange={(e) => setContrasenaActual(e.target.value)}
+                  onChange={(e) => { setContrasenaActual(e.target.value); setAlertaPassword(null) }}
                   placeholder="Tu contraseña actual"
                   className="input-field"
                   autoComplete="current-password"
@@ -356,8 +390,8 @@ export default function PerfilPage() {
                 <input
                   type="password"
                   value={contrasenaNueva}
-                  onChange={(e) => setContrasenaNueva(e.target.value)}
-                  placeholder="Mínimo 6 caracteres, letras y números"
+                  onChange={(e) => { setContrasenaNueva(e.target.value); setAlertaPassword(null) }}
+                  placeholder="Mínimo 8 caracteres, letras y números"
                   className="input-field"
                   autoComplete="new-password"
                 />
@@ -370,7 +404,7 @@ export default function PerfilPage() {
                 <input
                   type="password"
                   value={contrasenaConfirm}
-                  onChange={(e) => setContrasenaConfirm(e.target.value)}
+                  onChange={(e) => { setContrasenaConfirm(e.target.value); setAlertaPassword(null) }}
                   placeholder="Repite la nueva contraseña"
                   className="input-field"
                   autoComplete="new-password"
