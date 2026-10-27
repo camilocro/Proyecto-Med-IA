@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { adminService, UsuarioAdmin } from '@/services/admin.service'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -27,17 +27,26 @@ interface Props {
 
 export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
   const [cambiando, setCambiando] = useState<number | null>(null)
+  const [error,     setError]     = useState<string | null>(null)
 
   async function toggleEstado(usuario: UsuarioAdmin) {
     setCambiando(usuario.id_usuario)
-    const actualizado = await adminService.cambiarEstadoUsuario(
-      usuario.id_usuario,
-      !usuario.activo,
-    )
-    onUsuariosChange(
-      usuarios.map((u) => (u.id_usuario === actualizado.id_usuario ? actualizado : u)),
-    )
-    setCambiando(null)
+    setError(null)
+    try {
+      const actualizado = await adminService.cambiarEstadoUsuario(
+        usuario.id_usuario,
+        !usuario.activo,
+      )
+      onUsuariosChange(
+        usuarios.map((u) => (u.id_usuario === actualizado.id_usuario ? actualizado : u)),
+      )
+    } catch (err) {
+      // Antes el botón quedaba bloqueado en "cargando" si la petición fallaba
+      const mensaje = (err as { response?: { data?: { message?: string } } }).response?.data?.message
+      setError(mensaje ?? `No se pudo cambiar el estado de ${usuario.nombre}. Intentá de nuevo.`)
+    } finally {
+      setCambiando(null)
+    }
   }
 
   if (usuarios.length === 0) {
@@ -50,6 +59,12 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
 
   return (
     <div className="overflow-x-auto">
+      {error && (
+        <div role="alert" className="flex items-start gap-2 bg-red-50 border-b border-red-200 px-6 py-3">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
       <table className="w-full min-w-[640px]">
         <thead className="bg-gray-50">
           <tr className="text-xs text-gray-400 uppercase tracking-wider">

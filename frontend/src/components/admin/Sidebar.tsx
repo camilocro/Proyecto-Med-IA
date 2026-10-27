@@ -1,12 +1,9 @@
 'use client'
 
-import Link           from 'next/link'
-import { usePathname } from 'next/navigation'
 import { useRouter }   from 'next/navigation'
 import { useAuth }     from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
 import {
-  Shield,
   LayoutDashboard,
   Users,
   Stethoscope,
@@ -14,18 +11,30 @@ import {
   ClipboardList,
   Settings,
   LogOut,
+  LucideIcon,
 } from 'lucide-react'
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+
+/** Secciones del panel que ya están implementadas como pestañas de /admin */
+export type SeccionAdmin = 'dashboard' | 'usuarios'
+
+interface EnlaceSidebar {
+  label:    string
+  Icono:    LucideIcon
+  seccion?: SeccionAdmin   // sin sección = módulo aún no implementado
+}
 
 // ── Constantes (fuera del componente para evitar recreación) ──────────────────
 
-const ENLACES = [
-  { href: '/admin',                label: 'Dashboard',      Icono: LayoutDashboard },
-  { href: '/admin/usuarios',       label: 'Usuarios',       Icono: Users           },
-  { href: '/admin/medicos',        label: 'Médicos',        Icono: Stethoscope     },
-  { href: '/admin/especialidades', label: 'Especialidades', Icono: BookOpen        },
-  { href: '/admin/consultas',      label: 'Consultas',      Icono: ClipboardList   },
-  { href: '/admin/configuracion',  label: 'Configuración',  Icono: Settings        },
-] as const
+const ENLACES: EnlaceSidebar[] = [
+  { label: 'Dashboard',      Icono: LayoutDashboard, seccion: 'dashboard' },
+  { label: 'Usuarios',       Icono: Users,           seccion: 'usuarios'  },
+  { label: 'Médicos',        Icono: Stethoscope     },
+  { label: 'Especialidades', Icono: BookOpen        },
+  { label: 'Consultas',      Icono: ClipboardList   },
+  { label: 'Configuración',  Icono: Settings        },
+]
 
 // ── Subcomponente Avatar ──────────────────────────────────────────────────────
 
@@ -46,8 +55,12 @@ function InicialAvatar({ nombre }: { nombre: string }) {
 
 // ── Sidebar principal ─────────────────────────────────────────────────────────
 
-export default function Sidebar() {
-  const pathname = usePathname()
+interface SidebarProps {
+  seccionActiva:     SeccionAdmin
+  onCambiarSeccion:  (seccion: SeccionAdmin) => void
+}
+
+export default function Sidebar({ seccionActiva, onCambiarSeccion }: SidebarProps) {
   const router   = useRouter()
   const { usuario, cerrarSesion } = useAuth()
 
@@ -58,23 +71,38 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-64 min-h-screen bg-primary flex flex-col flex-shrink-0">
+    <aside className="hidden md:flex w-64 bg-primary flex-col flex-shrink-0 border-t border-white/10">
 
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-6 py-5 border-b border-white/10">
-        <Shield className="w-7 h-7 text-white" />
-        <span className="text-white font-bold text-xl tracking-wide">MED-IA</span>
-      </div>
-
-      {/* Navegación */}
+      {/* Navegación del panel */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {ENLACES.map(({ href, label, Icono }) => {
-          const esActivo = pathname === href
+        {ENLACES.map(({ label, Icono, seccion }) => {
+          if (!seccion) {
+            // Módulos planificados en el backlog pero aún no disponibles: no navegan a una ruta inexistente
+            return (
+              <span
+                key={label}
+                aria-disabled="true"
+                title="Disponible en un próximo sprint"
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium
+                           text-white/40 cursor-not-allowed select-none"
+              >
+                <Icono className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1">{label}</span>
+                <span className="text-[10px] uppercase tracking-wide bg-white/10 px-1.5 py-0.5 rounded">
+                  Pronto
+                </span>
+              </span>
+            )
+          }
+
+          const esActivo = seccionActiva === seccion
           return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+            <button
+              key={label}
+              type="button"
+              onClick={() => onCambiarSeccion(seccion)}
+              aria-current={esActivo ? 'page' : undefined}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 esActivo
                   ? 'bg-white/20 text-white'
                   : 'text-white/70 hover:text-white hover:bg-white/10'
@@ -82,28 +110,31 @@ export default function Sidebar() {
             >
               <Icono className="w-5 h-5 flex-shrink-0" />
               {label}
-            </Link>
+            </button>
           )
         })}
       </nav>
 
       {/* Usuario en el pie */}
       {usuario && (
-        <div className="px-4 py-4 border-t border-white/10">
+        <div className="px-4 py-4 border-t border-white/10 space-y-3">
           <div className="flex items-center gap-3">
             <InicialAvatar nombre={usuario.nombre} />
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-semibold truncate">{usuario.nombre}</p>
               <p className="text-white/60 text-xs capitalize">{usuario.rol}</p>
             </div>
-            <button
-              onClick={handleLogout}
-              title="Cerrar sesión"
-              className="text-white/60 hover:text-white transition-colors flex-shrink-0 p-1"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 text-white/80 hover:text-white
+                       text-sm transition-colors border border-white/30 rounded-lg px-3 py-2
+                       hover:bg-white/10"
+          >
+            <LogOut className="w-4 h-4" />
+            Cerrar sesión
+          </button>
         </div>
       )}
 

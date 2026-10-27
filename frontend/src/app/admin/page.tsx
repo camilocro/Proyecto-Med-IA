@@ -9,8 +9,9 @@ import {
   ConsultaReciente,
   UsuarioAdmin,
 } from '@/services/admin.service'
+import Navbar        from '@/components/layout/Navbar'
 import StatsCard     from '@/components/admin/StatsCard'
-import Sidebar       from '@/components/admin/Sidebar'
+import Sidebar, { SeccionAdmin } from '@/components/admin/Sidebar'
 import UsuariosTable from '@/components/admin/UsuariosTable'
 import {
   ClipboardList,
@@ -19,6 +20,7 @@ import {
   Users,
   RefreshCw,
   Clock,
+  AlertCircle,
 } from 'lucide-react'
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
@@ -170,7 +172,7 @@ function GraficoDonut() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'dashboard' | 'usuarios'
+type Tab = SeccionAdmin
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard'  },
@@ -185,6 +187,7 @@ interface EstadoPagina {
   usuarios:    UsuarioAdmin[]
   cargando:    boolean
   actualizado: Date | null
+  error:       string | null
 }
 
 const ESTADO_INICIAL: EstadoPagina = {
@@ -193,6 +196,7 @@ const ESTADO_INICIAL: EstadoPagina = {
   usuarios:    [],
   cargando:    true,
   actualizado: null,
+  error:       null,
 }
 
 // ── Página ────────────────────────────────────────────────────────────────────
@@ -213,21 +217,31 @@ export default function AdminPage() {
 
   // Cargar datos del servidor
   const cargarDatos = useCallback(async () => {
-    setEstado((prev) => ({ ...prev, cargando: true }))
+    setEstado((prev) => ({ ...prev, cargando: true, error: null }))
 
-    const [metricas, consultas, usuarios] = await Promise.all([
-      adminService.getDashboard(),
-      adminService.getConsultasRecientes(),
-      adminService.getUsuarios().catch(() => [] as UsuarioAdmin[]),
-    ])
+    try {
+      const [metricas, consultas, usuarios] = await Promise.all([
+        adminService.getDashboard(),
+        adminService.getConsultasRecientes(),
+        adminService.getUsuarios().catch(() => [] as UsuarioAdmin[]),
+      ])
 
-    setEstado({
-      metricas,
-      consultas,
-      usuarios,
-      cargando:    false,
-      actualizado: new Date(),
-    })
+      setEstado({
+        metricas,
+        consultas,
+        usuarios,
+        cargando:    false,
+        actualizado: new Date(),
+        error:       null,
+      })
+    } catch {
+      // Sin esto el panel quedaba cargando indefinidamente si el backend fallaba
+      setEstado((prev) => ({
+        ...prev,
+        cargando: false,
+        error:    'No se pudieron cargar los datos del panel. Verificá tu conexión e intentá de nuevo.',
+      }))
+    }
   }, [])
 
   useEffect(() => {
@@ -237,8 +251,8 @@ export default function AdminPage() {
   // ── Pantalla de carga ──────────────────────────────────────────────────────
   if (cargandoAuth) {
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
+      <div className="flex flex-col min-h-screen">
+        <Navbar />
         <div className="flex-1 flex items-center justify-center">
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -248,7 +262,7 @@ export default function AdminPage() {
 
   if (!esAdmin) return null
 
-  const { metricas, consultas, usuarios, cargando, actualizado } = estado
+  const { metricas, consultas, usuarios, cargando, actualizado, error } = estado
 
   const fechaHoy = new Date().toLocaleDateString('es-BO', {
     weekday: 'long',
@@ -259,8 +273,13 @@ export default function AdminPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+    <div className="min-h-screen bg-gray-50 grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] md:grid-cols-[16rem_minmax(0,1fr)]">
+      {/* Barra de navegación global: mantiene el acceso al resto del sistema y a "Salir" */}
+      <div className="md:col-span-2">
+        <Navbar />
+      </div>
+
+      <Sidebar seccionActiva={tabActiva} onCambiarSeccion={setTabActiva} />
 
       <div className="flex-1 flex flex-col min-w-0">
 
@@ -312,6 +331,23 @@ export default function AdminPage() {
         </div>
 
         <main className="flex-1 p-8 space-y-8">
+
+          {/* Error al cargar datos */}
+          {error && (
+            <div role="alert" className="flex items-start justify-between gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+              <button
+                type="button"
+                onClick={cargarDatos}
+                className="text-sm font-medium text-red-700 hover:underline flex-shrink-0"
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
 
           {/* ══ TAB DASHBOARD ══════════════════════════════════════════════ */}
           {tabActiva === 'dashboard' && (
