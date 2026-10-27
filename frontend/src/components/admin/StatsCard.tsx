@@ -36,7 +36,7 @@ export default function StatsCard({
     <div className={`bg-white rounded-2xl border ${c.borde} p-6 flex flex-col gap-4`}>
 
       {/* Ícono + subtexto */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap xl:flex-nowrap items-start justify-between gap-2 xl:gap-0">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${c.icono}`}>
           <Icono className="w-6 h-6" />
         </div>

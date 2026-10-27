@@ -129,7 +129,7 @@ function GraficoDonut() {
   })
 
   return (
-    <div className="flex items-center gap-8">
+    <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
       {/* SVG dona */}
       <svg viewBox="0 0 120 120" className="w-32 h-32 flex-shrink-0 -rotate-90">
         <circle
@@ -150,7 +150,7 @@ function GraficoDonut() {
       </svg>
 
       {/* Leyenda */}
-      <div className="space-y-3 flex-1">
+      <div className="space-y-3 flex-1 w-full sm:w-auto">
         {ESPECIALIDADES.map((e) => (
           <div key={e.nombre} className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
@@ -284,7 +284,7 @@ export default function AdminPage() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* ── Topbar ── */}
-        <header className="bg-white border-b border-gray-100 px-8 py-4 flex items-center justify-between gap-4">
+        <header className="bg-white border-b border-gray-100 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Panel Administrativo</h1>
             <p className="text-sm text-gray-400 capitalize">{fechaHoy}</p>
@@ -312,7 +312,7 @@ export default function AdminPage() {
         </header>
 
         {/* ── Tabs ── */}
-        <div className="bg-white border-b border-gray-100 px-8">
+        <div className="bg-white border-b border-gray-100 px-4 sm:px-8">
           <div className="flex gap-0">
             {TABS.map(({ id, label }) => (
               <button
@@ -330,7 +330,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <main className="flex-1 p-8 space-y-8">
+        <main className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8">
 
           {/* Error al cargar datos */}
           {error && (

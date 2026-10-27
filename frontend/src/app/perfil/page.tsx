@@ -60,7 +60,7 @@ function FilaDato({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-gray-400 mb-0.5">{etiqueta}</p>
-        <div className="text-sm font-medium text-gray-800">{valor}</div>
+        <div className="text-sm font-medium text-gray-800 break-words">{valor}</div>
       </div>
     </div>
   )
@@ -267,20 +267,20 @@ export default function PerfilPage() {
           {/* ── Tarjeta de datos ── */}
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             {/* Avatar + nombre + rol */}
-            <div className="bg-primary px-8 py-8 flex items-center gap-5">
+            <div className="bg-primary px-5 sm:px-8 py-6 sm:py-8 flex items-center gap-4 sm:gap-5">
               <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
                               text-white text-2xl font-bold select-none flex-shrink-0">
                 {perfil.nombre.split(' ').slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('')}
               </div>
-              <div>
-                <h2 className="text-white text-xl font-bold">{perfil.nombre}</h2>
-                <p className="text-white/70 text-sm mb-2">{perfil.correo}</p>
+              <div className="min-w-0">
+                <h2 className="text-white text-xl font-bold break-words">{perfil.nombre}</h2>
+                <p className="text-white/70 text-sm mb-2 break-words">{perfil.correo}</p>
                 <BadgeRol rol={perfil.rol} />
               </div>
             </div>
 
             {/* Datos detallados */}
-            <div className="px-8 py-2">
+            <div className="px-5 sm:px-8 py-2">
               <FilaDato
                 icono={User}
                 etiqueta="Nombre completo"
@@ -314,7 +314,7 @@ export default function PerfilPage() {
           </div>
 
           {/* ── Formulario: editar nombre ── */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
                 <Pencil className="w-4 h-4 text-blue-600" />
@@ -357,7 +357,7 @@ export default function PerfilPage() {
           </div>
 
           {/* ── Formulario: cambiar contraseña ── */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
                 <Lock className="w-4 h-4 text-amber-600" />
