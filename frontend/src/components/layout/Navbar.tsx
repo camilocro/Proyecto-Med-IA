@@ -5,7 +5,7 @@ import { useRouter }   from 'next/navigation'
 import { usePathname } from 'next/navigation'
 import { useAuth }     from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
-import { Shield, LogOut } from 'lucide-react'
+import { Shield, LogOut, UserCircle } from 'lucide-react'
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
@@ -15,7 +15,8 @@ const ENLACES_BASE = [
   { href: '/historial', label: 'Historial' },
 ]
 
-const ENLACE_ADMIN = { href: '/admin', label: 'Admin' }
+const ENLACE_ADMIN  = { href: '/admin',  label: 'Admin'     }
+const ENLACE_PERFIL = { href: '/perfil', label: 'Mi Perfil' }
 
 // ── Avatar con iniciales ────────────────────────────────────────────────────────
 
@@ -37,11 +38,16 @@ function InicialAvatar({ nombre }: { nombre: string }) {
 // ── Componente principal ────────────────────────────────────────────────────────
 
 export default function Navbar() {
-  const { usuario, esAdmin, cerrarSesion } = useAuth()
+  const { usuario, esAdmin, estaAutenticado, cerrarSesion } = useAuth()
   const router   = useRouter()
   const pathname = usePathname()
 
-  const enlaces = [...ENLACES_BASE, ...(esAdmin ? [ENLACE_ADMIN] : [])]
+  // Construye los enlaces según el rol
+  const enlaces = [
+    ...ENLACES_BASE,
+    ...(estaAutenticado ? [ENLACE_PERFIL] : []),
+    ...(esAdmin         ? [ENLACE_ADMIN]  : []),
+  ]
 
   async function handleLogout() {
     await authService.logout().catch(() => {})
@@ -83,8 +89,14 @@ export default function Navbar() {
         <div className="flex items-center gap-3 flex-shrink-0">
           {usuario ? (
             <>
-              <InicialAvatar nombre={usuario.nombre} />
-              <span className="text-sm font-medium hidden sm:block">{usuario.nombre}</span>
+              <Link
+                href="/perfil"
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                title="Ver mi perfil"
+              >
+                <InicialAvatar nombre={usuario.nombre} />
+                <span className="text-sm font-medium hidden sm:block">{usuario.nombre}</span>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 text-white/80 hover:text-white
