@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import { useAuth }     from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
 import { vieneDeRegistroExitoso } from '@/lib/flujoAuth'
-import { Shield, LogOut, UserCircle } from 'lucide-react'
+import { Shield, LogOut, UserCircle, Menu, X } from 'lucide-react'
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,12 @@ export default function Navbar() {
     setOcultarRegistro(vieneDeRegistroExitoso())
   }, [pathname])
 
+  // Menú desplegable para celular y tablet (en escritorio la barra se ve completa)
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  useEffect(() => {
+    setMenuAbierto(false)
+  }, [pathname])
+
   // Construye los enlaces según el rol
   const enlaces = [
     ...ENLACES_BASE,
@@ -73,8 +79,8 @@ export default function Navbar() {
           MED-IA
         </Link>
 
-        {/* Navegación central (en pantallas angostas se desplaza para no ocultar "Salir") */}
-        <nav className="flex items-center gap-1 min-w-0 overflow-x-auto">
+        {/* Navegación central (desde 1024 px; en pantallas menores va en el menú desplegable) */}
+        <nav className="hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto">
           {enlaces.map(({ href, label }) => {
             const esActivo = pathname === href
             return (
@@ -126,7 +132,7 @@ export default function Navbar() {
               {!ocultarRegistro && (
                 <Link
                   href="/registro"
-                  className="bg-white text-primary text-sm font-semibold px-4 py-1.5
+                  className="hidden sm:inline-block bg-white text-primary text-sm font-semibold px-4 py-1.5
                              rounded-lg hover:bg-light transition-colors"
                 >
                   Registrarse
@@ -134,9 +140,52 @@ export default function Navbar() {
               )}
             </>
           )}
+
+          {/* Botón del menú (solo celular y tablet) */}
+          <button
+            type="button"
+            onClick={() => setMenuAbierto((abierto) => !abierto)}
+            aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={menuAbierto}
+            aria-controls="menu-movil"
+            className="lg:hidden p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            {menuAbierto ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
 
       </div>
+
+      {/* Menú desplegable (solo celular y tablet) */}
+      {menuAbierto && (
+        <nav id="menu-movil" className="lg:hidden border-t border-white/10 px-4 py-3 space-y-1">
+          {enlaces.map(({ href, label }) => {
+            const esActivo = pathname === href
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  esActivo
+                    ? 'bg-white/20 text-white'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {label}
+              </Link>
+            )
+          })}
+          {!usuario && !ocultarRegistro && (
+            <Link
+              href="/registro"
+              className="sm:hidden block text-center bg-white text-primary text-sm font-semibold px-4 py-2.5
+                         rounded-lg hover:bg-light transition-colors mt-2"
+            >
+              Registrarse
+            </Link>
+          )}
+        </nav>
+      )}
     </header>
   )
 }
