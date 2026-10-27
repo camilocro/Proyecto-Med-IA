@@ -1,6 +1,9 @@
+'use client'
+
 import Link     from 'next/link'
 import Navbar   from '@/components/layout/Navbar'
 import Footer   from '@/components/layout/Footer'
+import { useAuth } from '@/hooks/useAuth'
 import { Stethoscope, ClipboardList, UserCheck } from 'lucide-react'
 
 const CARACTERISTICAS = [
@@ -22,6 +25,10 @@ const CARACTERISTICAS = [
 ]
 
 export default function LandingPage() {
+  // "Registrarse" solo se ofrece a quien no tiene sesión iniciada
+  const { estaAutenticado, cargando } = useAuth()
+  const mostrarRegistro = !cargando && !estaAutenticado
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
@@ -42,9 +49,11 @@ export default function LandingPage() {
             <Link href="/consulta" className="btn-primary w-full sm:w-auto text-center px-8 py-3.5">
               Iniciar Consulta
             </Link>
-            <Link href="/registro" className="btn-outline w-full sm:w-auto text-center px-8 py-3.5">
-              Registrarse
-            </Link>
+            {mostrarRegistro && (
+              <Link href="/registro" className="btn-outline w-full sm:w-auto text-center px-8 py-3.5">
+                Registrarse
+              </Link>
+            )}
           </div>
 
           <p className="mt-6 text-xs text-gray-400">

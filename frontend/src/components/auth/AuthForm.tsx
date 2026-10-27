@@ -1,12 +1,28 @@
 'use client'
 
-import { useState }     from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter }    from 'next/navigation'
 import { useAuth }      from '@/hooks/useAuth'
 import { authService }  from '@/services/auth.service'
-import { Shield, Mail, Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import {
+  RUTA_LOGIN_TRAS_REGISTRO,
+  vieneDeRegistroExitoso,
+  recordarCorreoRegistrado,
+  consumirCorreoRegistrado,
+} from '@/lib/flujoAuth'
+import { Shield, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 type TabActiva = 'login' | 'registro'
+
+type CampoLogin    = 'correo' | 'password'
+type CampoRegistro = 'nombre' | 'correo' | 'password' | 'confirmar' | 'terminos'
+type ErroresLogin    = Partial<Record<CampoLogin, string>>
+type ErroresRegistro = Partial<Record<CampoRegistro, string>>
+
+// Mismas reglas que valida el backend (HU-001 CA-3, HU-033)
+const REGEX_CORREO        = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+const MIN_LONGITUD_NOMBRE   = 2
+const MIN_LONGITUD_PASSWORD = 8
 
 const FUERZA_PASSWORD: { min: number; etiqueta: string; color: string }[] = [
   { min: 0,  etiqueta: '',        color: 'bg-gray-200'  },
@@ -32,50 +48,137 @@ function nivelFuerza(puntaje: number) {
   return FUERZA_PASSWORD[0]
 }
 
+// ── Validaciones del lado del cliente ─────────────────────────────────────────
+
+function validarCorreo(correo: string): string | undefined {
+  if (!correo.trim())                    return 'Ingresá tu correo electrónico.'
+  if (!REGEX_CORREO.test(correo.trim())) return 'Ingresá un correo electrónico válido (ej. nombre@correo.com).'
+  return undefined
+}
+
+function validarLogin(correo: string, password: string): ErroresLogin {
+  const errores: ErroresLogin = {}
+  const errorCorreo = validarCorreo(correo)
+  if (errorCorreo) errores.correo = errorCorreo
+  if (!password)   errores.password = 'Ingresá tu contraseña.'
+  return errores
+}
+
+function validarRegistro(datos: {
+  nombre: string; correo: string; password: string; confirmar: string; aceptaTerminos: boolean
+}): ErroresRegistro {
+  const errores: ErroresRegistro = {}
+
+  if (!datos.nombre.trim()) {
+    errores.nombre = 'Ingresá tu nombre completo.'
+  } else if (datos.nombre.trim().length < MIN_LONGITUD_NOMBRE) {
+    errores.nombre = `El nombre debe tener al menos ${MIN_LONGITUD_NOMBRE} caracteres.`
+  }
+
+  const errorCorreo = validarCorreo(datos.correo)
+  if (errorCorreo) errores.correo = errorCorreo
+
+  if (!datos.password) {
+    errores.password = 'Ingresá una contraseña.'
+  } else if (
+    datos.password.length < MIN_LONGITUD_PASSWORD ||
+    !/[A-Za-z]/.test(datos.password) ||
+    !/\d/.test(datos.password)
+  ) {
+    errores.password = `La contraseña debe tener al menos ${MIN_LONGITUD_PASSWORD} caracteres, una letra y un número.`
+  }
+
+  if (!datos.confirmar) {
+    errores.confirmar = 'Confirmá tu contraseña.'
+  } else if (datos.password !== datos.confirmar) {
+    errores.confirmar = 'Las contraseñas no coinciden.'
+  }
+
+  if (!datos.aceptaTerminos) errores.terminos = 'Debés aceptar los términos y condiciones.'
+
+  return errores
+}
+
+function mensajeErrorServidor(err: unknown, porDefecto: string): string {
+  const error = err as { response?: { data?: { message?: string } } }
+  if (!error.response) return 'No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.'
+  return error.response.data?.message ?? porDefecto
+}
+
+// ── Campo de texto ────────────────────────────────────────────────────────────
+
 interface InputFieldProps {
+  id:          string
   icono:       React.ReactNode
   tipo:        string
   placeholder: string
   value:       string
   onChange:    (v: string) => void
   disabled?:   boolean
+  error?:      string
+  autoComplete?: string
   accionDerecha?: React.ReactNode
 }
 
-function InputField({ icono, tipo, placeholder, value, onChange, disabled, accionDerecha }: InputFieldProps) {
+function InputField({
+  id, icono, tipo, placeholder, value, onChange, disabled, error, autoComplete, accionDerecha,
+}: InputFieldProps) {
   return (
-    <div className="relative">
-      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">{icono}</span>
-      <input
-        type={tipo}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 pl-11
-                   text-sm text-gray-800 placeholder-gray-400
-                   focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
-                   disabled:bg-gray-50 disabled:text-gray-400"
-      />
-      {accionDerecha && (
-        <span className="absolute right-4 top-1/2 -translate-y-1/2">{accionDerecha}</span>
+    <div>
+      <div className="relative">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">{icono}</span>
+        <input
+          id={id}
+          type={tipo}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          autoComplete={autoComplete}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={`w-full border rounded-xl px-4 py-3 pl-11
+                     text-sm text-gray-800 placeholder-gray-400
+                     focus:outline-none focus:ring-2 focus:border-transparent
+                     disabled:bg-gray-50 disabled:text-gray-400 ${
+                       error
+                         ? 'border-red-300 focus:ring-red-400'
+                         : 'border-gray-200 focus:ring-primary'
+                     }`}
+        />
+        {accionDerecha && (
+          <span className="absolute right-4 top-1/2 -translate-y-1/2">{accionDerecha}</span>
+        )}
+      </div>
+      {error && (
+        <p id={`${id}-error`} role="alert" className="text-xs text-red-600 mt-1.5 ml-1">
+          {error}
+        </p>
       )}
     </div>
   )
 }
 
+// ── Formulario ────────────────────────────────────────────────────────────────
+
 export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabActiva }) {
   const router              = useRouter()
-  const { guardarSesion }   = useAuth()
+  const { guardarSesion, estaAutenticado, cargando: cargandoSesion } = useAuth()
   const [tab, setTab]       = useState<TabActiva>(tabInicial)
   const [cargando, setCargando] = useState(false)
+  // Error del servidor: permanece visible hasta que el usuario corrige un campo,
+  // vuelve a enviar el formulario o cambia de pestaña.
   const [error,    setError]    = useState<string | null>(null)
+
+  // Tras un registro exitoso solo se muestra el inicio de sesión (HU-001 CA-5)
+  const [registroExitoso, setRegistroExitoso] = useState(false)
 
   // Login
   const [correoLogin,    setCorreoLogin]    = useState('')
   const [passwordLogin,  setPasswordLogin]  = useState('')
   const [verPasswordLogin, setVerPasswordLogin] = useState(false)
   const [recordarme,     setRecordarme]     = useState(false)
+  const [erroresLogin,   setErroresLogin]   = useState<ErroresLogin>({})
 
   // Registro
   const [nombre,           setNombre]           = useState('')
@@ -84,20 +187,56 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
   const [verPasswordReg,   setVerPasswordReg]    = useState(false)
   const [confirmarPassword, setConfirmarPassword] = useState('')
   const [aceptaTerminos,   setAceptaTerminos]    = useState(false)
+  const [erroresRegistro,  setErroresRegistro]   = useState<ErroresRegistro>({})
 
   const fuerzaPassword = calcularFuerzaPassword(passwordReg)
   const nivelActual    = nivelFuerza(fuerzaPassword)
 
+  // Si se llega desde un registro exitoso, mostrar solo el login con el correo precargado
+  useEffect(() => {
+    if (!vieneDeRegistroExitoso()) return
+    setRegistroExitoso(true)
+    setTab('login')
+    const correo = consumirCorreoRegistrado()
+    if (correo) setCorreoLogin(correo)
+  }, [])
+
+  // Un usuario con sesión activa no necesita ver login ni registro
+  useEffect(() => {
+    if (!cargandoSesion && estaAutenticado) router.replace('/')
+  }, [cargandoSesion, estaAutenticado, router])
+
+  // ── Handlers de cambio: limpian solo el error del campo modificado ──────────
+
+  function cambiarCampoLogin(campo: CampoLogin, setter: (v: string) => void) {
+    return (valor: string) => {
+      setter(valor)
+      setError(null)
+      setErroresLogin((prev) => ({ ...prev, [campo]: undefined }))
+    }
+  }
+
+  function cambiarCampoRegistro(campo: CampoRegistro, setter: (v: string) => void) {
+    return (valor: string) => {
+      setter(valor)
+      setError(null)
+      setErroresRegistro((prev) => ({ ...prev, [campo]: undefined }))
+    }
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (!correoLogin || !passwordLogin) return
+
+    const errores = validarLogin(correoLogin, passwordLogin)
+    setErroresLogin(errores)
+    setError(null)
+    if (Object.keys(errores).length > 0) return
 
     setCargando(true)
-    setError(null)
 
-    const resultado = await authService.login({ correo: correoLogin, password: passwordLogin })
+    const resultado = await authService.login({ correo: correoLogin.trim(), password: passwordLogin })
       .catch((err) => {
-        setError(err.response?.data?.message ?? 'Credenciales inválidas. Verificá tus datos.')
+        setError(mensajeErrorServidor(err, 'Credenciales inválidas. Verificá tus datos.'))
         return null
       })
       .finally(() => setCargando(false))
@@ -109,36 +248,41 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
   async function handleRegistro(e: React.FormEvent) {
     e.preventDefault()
-    if (!nombre || !correoReg || !passwordReg || !confirmarPassword) return
 
-    if (passwordReg !== confirmarPassword) {
-      setError('Las contraseñas no coinciden.')
-      return
-    }
-    if (!aceptaTerminos) {
-      setError('Debés aceptar los términos y condiciones.')
-      return
-    }
+    const errores = validarRegistro({
+      nombre, correo: correoReg, password: passwordReg, confirmar: confirmarPassword, aceptaTerminos,
+    })
+    setErroresRegistro(errores)
+    setError(null)
+    if (Object.keys(errores).length > 0) return
 
     setCargando(true)
-    setError(null)
 
-    const resultado = await authService.register({ nombre, correo: correoReg, password: passwordReg })
+    const correoNormalizado = correoReg.trim()
+    const resultado = await authService.register({
+      nombre: nombre.trim(), correo: correoNormalizado, password: passwordReg,
+    })
       .catch((err) => {
-        setError(err.response?.data?.message ?? 'Error al crear la cuenta. Intentá de nuevo.')
+        setError(mensajeErrorServidor(err, 'Error al crear la cuenta. Intentá de nuevo.'))
         return null
       })
       .finally(() => setCargando(false))
 
     if (!resultado) return
-    guardarSesion(resultado.token, resultado.usuario)
-    router.push('/')
+
+    // Flujo definido: la cuenta se crea y el usuario debe iniciar sesión (no se guarda sesión aquí)
+    recordarCorreoRegistrado(correoNormalizado)
+    router.replace(RUTA_LOGIN_TRAS_REGISTRO)
   }
 
   function cambiarTab(nuevaTab: TabActiva) {
     setTab(nuevaTab)
     setError(null)
+    setErroresLogin({})
+    setErroresRegistro({})
   }
+
+  const tabsVisibles: TabActiva[] = registroExitoso ? ['login'] : ['login', 'registro']
 
   return (
     <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
@@ -153,9 +297,10 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">
-        {(['login', 'registro'] as TabActiva[]).map((t) => (
+        {tabsVisibles.map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => cambiarTab(t)}
             className={`flex-1 pb-3 text-sm font-medium transition-colors ${
               tab === t
@@ -168,9 +313,19 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
         ))}
       </div>
 
-      {/* Error global */}
+      {/* Registro exitoso */}
+      {registroExitoso && tab === 'login' && (
+        <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
+          <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-green-700">
+            Tu cuenta fue creada correctamente. Iniciá sesión para continuar.
+          </p>
+        </div>
+      )}
+
+      {/* Error global (servidor) */}
       {error && (
-        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+        <div role="alert" className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
           <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-red-700">{error}</p>
         </div>
@@ -178,22 +333,28 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
       {/* ── Formulario Login ─────────────────────────────────────────────── */}
       {tab === 'login' && (
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} noValidate className="space-y-4">
           <InputField
+            id="login-correo"
             icono={<Mail className="w-4 h-4" />}
             tipo="email"
             placeholder="Correo electrónico"
             value={correoLogin}
-            onChange={setCorreoLogin}
+            onChange={cambiarCampoLogin('correo', setCorreoLogin)}
             disabled={cargando}
+            error={erroresLogin.correo}
+            autoComplete="email"
           />
           <InputField
+            id="login-password"
             icono={<Lock className="w-4 h-4" />}
             tipo={verPasswordLogin ? 'text' : 'password'}
             placeholder="Contraseña"
             value={passwordLogin}
-            onChange={setPasswordLogin}
+            onChange={cambiarCampoLogin('password', setPasswordLogin)}
             disabled={cargando}
+            error={erroresLogin.password}
+            autoComplete="current-password"
             accionDerecha={
               <button
                 type="button"
@@ -217,7 +378,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
           <button
             type="submit"
-            disabled={cargando || !correoLogin || !passwordLogin}
+            disabled={cargando}
             className="w-full bg-accent text-white font-semibold py-3 rounded-xl
                        hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -257,31 +418,40 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
       {/* ── Formulario Registro ──────────────────────────────────────────── */}
       {tab === 'registro' && (
-        <form onSubmit={handleRegistro} className="space-y-4">
+        <form onSubmit={handleRegistro} noValidate className="space-y-4">
           <InputField
+            id="registro-nombre"
             icono={<User className="w-4 h-4" />}
             tipo="text"
             placeholder="Nombre completo"
             value={nombre}
-            onChange={setNombre}
+            onChange={cambiarCampoRegistro('nombre', setNombre)}
             disabled={cargando}
+            error={erroresRegistro.nombre}
+            autoComplete="name"
           />
           <InputField
+            id="registro-correo"
             icono={<Mail className="w-4 h-4" />}
             tipo="email"
             placeholder="Correo electrónico"
             value={correoReg}
-            onChange={setCorreoReg}
+            onChange={cambiarCampoRegistro('correo', setCorreoReg)}
             disabled={cargando}
+            error={erroresRegistro.correo}
+            autoComplete="email"
           />
           <div className="space-y-1.5">
             <InputField
+              id="registro-password"
               icono={<Lock className="w-4 h-4" />}
               tipo={verPasswordReg ? 'text' : 'password'}
               placeholder="Contraseña"
               value={passwordReg}
-              onChange={setPasswordReg}
+              onChange={cambiarCampoRegistro('password', setPasswordReg)}
               disabled={cargando}
+              error={erroresRegistro.password}
+              autoComplete="new-password"
               accionDerecha={
                 <button
                   type="button"
@@ -316,27 +486,39 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
           </div>
 
           <InputField
+            id="registro-confirmar"
             icono={<Lock className="w-4 h-4" />}
             tipo="password"
             placeholder="Confirmar contraseña"
             value={confirmarPassword}
-            onChange={setConfirmarPassword}
+            onChange={cambiarCampoRegistro('confirmar', setConfirmarPassword)}
             disabled={cargando}
+            error={erroresRegistro.confirmar}
+            autoComplete="new-password"
           />
 
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={aceptaTerminos}
-              onChange={(e) => setAceptaTerminos(e.target.checked)}
-              className="w-4 h-4 accent-primary rounded"
-            />
-            <span className="text-sm text-gray-600">Acepto los términos y condiciones</span>
-          </label>
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={aceptaTerminos}
+                onChange={(e) => {
+                  setAceptaTerminos(e.target.checked)
+                  setError(null)
+                  setErroresRegistro((prev) => ({ ...prev, terminos: undefined }))
+                }}
+                className="w-4 h-4 accent-primary rounded"
+              />
+              <span className="text-sm text-gray-600">Acepto los términos y condiciones</span>
+            </label>
+            {erroresRegistro.terminos && (
+              <p role="alert" className="text-xs text-red-600 mt-1.5 ml-1">{erroresRegistro.terminos}</p>
+            )}
+          </div>
 
           <button
             type="submit"
-            disabled={cargando || !nombre || !correoReg || !passwordReg || !confirmarPassword || !aceptaTerminos}
+            disabled={cargando}
             className="w-full bg-accent text-white font-semibold py-3 rounded-xl
                        hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -370,22 +552,24 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
         </form>
       )}
 
-      {/* Link inferior */}
-      <p className="text-center text-sm text-gray-400 mt-6">
-        {tab === 'login' ? (
-          <>¿No tenés cuenta?{' '}
-            <button onClick={() => cambiarTab('registro')} className="text-accent hover:underline font-medium">
-              Registrate gratis
-            </button>
-          </>
-        ) : (
-          <>¿Ya tenés cuenta?{' '}
-            <button onClick={() => cambiarTab('login')} className="text-accent hover:underline font-medium">
-              Iniciá sesión
-            </button>
-          </>
-        )}
-      </p>
+      {/* Link inferior (no se ofrece registrarse otra vez tras un registro exitoso) */}
+      {!registroExitoso && (
+        <p className="text-center text-sm text-gray-400 mt-6">
+          {tab === 'login' ? (
+            <>¿No tenés cuenta?{' '}
+              <button type="button" onClick={() => cambiarTab('registro')} className="text-accent hover:underline font-medium">
+                Registrate gratis
+              </button>
+            </>
+          ) : (
+            <>¿Ya tenés cuenta?{' '}
+              <button type="button" onClick={() => cambiarTab('login')} className="text-accent hover:underline font-medium">
+                Iniciá sesión
+              </button>
+            </>
+          )}
+        </p>
+      )}
     </div>
   )
 }
