@@ -1,55 +1,93 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Stethoscope, AlertCircle } from 'lucide-react'
+import { useState } from "react";
+import { Stethoscope, AlertCircle, AlertTriangle } from "lucide-react";
+import { ContadorConsultas } from "@/services/triage.service";
 
-const MIN_CARACTERES = 20
-const MAX_CARACTERES = 500
+const MIN_CARACTERES = 20;
+const MAX_CARACTERES = 500;
 
 interface SintomasFormProps {
-  onSubmit:    (descripcion: string) => void
-  cargando:    boolean
-  consultasRestantes: number
+  onSubmit: (descripcion: string) => void;
+  cargando: boolean;
+  contador: ContadorConsultas | null; // null mientras carga o si no se pudo obtener
 }
 
-export default function SintomasForm({ onSubmit, cargando, consultasRestantes }: SintomasFormProps) {
-  const [descripcion, setDescripcion] = useState('')
+function formatearReinicio(iso: string): string {
+  const fecha = new Date(iso);
+  const hora = fecha.toLocaleTimeString("es-BO", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const dia = fecha.toLocaleDateString("es-BO", {
+    day: "numeric",
+    month: "long",
+  });
+  return `${hora} del ${dia}`;
+}
 
-  const caracteresActuales = descripcion.trim().length
-  const esValido           = caracteresActuales >= MIN_CARACTERES
-  const limiteSuperado     = consultasRestantes <= 0
+export default function SintomasForm({
+  onSubmit,
+  cargando,
+  contador,
+}: SintomasFormProps) {
+  const [descripcion, setDescripcion] = useState("");
+
+  const caracteresActuales = descripcion.trim().length;
+  const esValido = caracteresActuales >= MIN_CARACTERES;
+  const limiteSuperado = contador?.restantes === 0;
+  const quedaUna = contador?.restantes === 1;
 
   function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!esValido || cargando || limiteSuperado) return
-    onSubmit(descripcion.trim())
+    e.preventDefault();
+    if (!esValido || cargando || limiteSuperado) return;
+    onSubmit(descripcion.trim());
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Aviso de límite */}
-      {limiteSuperado && (
+      {/* Límite alcanzado */}
+      {contador && limiteSuperado && (
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg p-4">
           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-red-700">
-            Alcanzaste el límite de consultas diarias. Volvé mañana para realizar una nueva consulta.
+            Alcanzaste el límite de {contador.limite} consultas de hoy. Podrás
+            hacer una nueva consulta desde las{" "}
+            <span className="font-semibold">
+              {formatearReinicio(contador.reinicio)}
+            </span>
+            .
           </p>
         </div>
       )}
 
-      {/* Contador de consultas restantes */}
-      {!limiteSuperado && (
+      {/* Última consulta disponible */}
+      {contador && quedaUna && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-700">
+            Te queda <span className="font-semibold">1 consulta</span>{" "}
+            disponible hoy.
+          </p>
+        </div>
+      )}
+
+      {/* Contador normal */}
+      {contador && !limiteSuperado && !quedaUna && (
         <p className="text-sm text-gray-500">
-          Consultas disponibles hoy:{' '}
-          <span className={`font-semibold ${consultasRestantes === 1 ? 'text-amber-600' : 'text-green-600'}`}>
-            {consultasRestantes} de 5
+          Consultas disponibles hoy:{" "}
+          <span className="font-semibold text-green-600">
+            {contador.restantes} de {contador.limite}
           </span>
         </p>
       )}
 
       {/* Textarea */}
       <div>
-        <label htmlFor="sintomas" className="block text-sm font-medium text-gray-700 mb-2">
+        <label
+          htmlFor="sintomas"
+          className="block text-sm font-medium text-gray-700 mb-2"
+        >
           Describí tus síntomas
         </label>
         <textarea
@@ -66,9 +104,13 @@ export default function SintomasForm({ onSubmit, cargando, consultasRestantes }:
         />
         <div className="flex justify-between mt-1">
           <p className="text-xs text-gray-400">
-            {!esValido && caracteresActuales > 0 && `Mínimo ${MIN_CARACTERES} caracteres`}
+            {!esValido &&
+              caracteresActuales > 0 &&
+              `Mínimo ${MIN_CARACTERES} caracteres`}
           </p>
-          <p className={`text-xs ${caracteresActuales > MAX_CARACTERES * 0.9 ? 'text-amber-600' : 'text-gray-400'}`}>
+          <p
+            className={`text-xs ${caracteresActuales > MAX_CARACTERES * 0.9 ? "text-amber-600" : "text-gray-400"}`}
+          >
             {caracteresActuales} / {MAX_CARACTERES}
           </p>
         </div>
@@ -97,8 +139,9 @@ export default function SintomasForm({ onSubmit, cargando, consultasRestantes }:
 
       {/* Aviso no diagnóstico */}
       <p className="text-xs text-center text-gray-400">
-        Med-IA te orienta hacia el especialista correcto. No emite diagnósticos médicos.
+        Med-IA te orienta hacia el especialista correcto. No emite diagnósticos
+        médicos.
       </p>
     </form>
-  )
+  );
 }
