@@ -17,6 +17,7 @@ import {
   MAX_LONGITUD_DESCRIPCION,
   MAX_LONGITUD_RESPUESTA,
 } from "../../constants";
+import { calcularUsoDiario } from "../../middleware/dailyLimit.middleware";
 
 // ─── Validaciones de entrada ──────────────────────────────────────────────────
 
@@ -134,4 +135,8 @@ export async function historial(req: Request, res: Response) {
   const usuario = (req as AuthenticatedRequest).usuario;
   const consultas = await obtenerHistorialPaciente(usuario.id_usuario);
   res.json(ok(consultas));
+}
+
+export async function restantes(req: Request, res: Response) {
+  res.json(ok(await calcularUsoDiario(req)));
 }
