@@ -9,6 +9,7 @@ import SintomasForm from "@/components/triage/SintomasForm";
 import PreguntasIA from "@/components/triage/PreguntasIA";
 import ResultadoTriage from "@/components/triage/ResultadoTriage";
 import { AlertCircle } from "lucide-react";
+import CancelarConsulta from "@/components/triage/CancelarConsulta";
 
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
 
@@ -107,6 +108,24 @@ export default function ConsultaPage() {
     cargarContador();
   }
 
+  async function handleCancelarConsulta() {
+    if (!consulta) return;
+    setError(null);
+
+    const cancelada = await triageService
+      .cancelarConsulta(consulta.id_consulta)
+      .then(() => true)
+      .catch((err) => {
+        setError(
+          err.response?.data?.message ??
+            "No se pudo cancelar la consulta. Intentá de nuevo.",
+        );
+        return false;
+      });
+
+    if (cancelada) handleNuevaConsulta(); // vuelve al inicio y recarga el contador
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   const TITULOS: Record<EtapaConsulta, string> = {
@@ -183,13 +202,20 @@ export default function ConsultaPage() {
             {etapa === "preguntas" &&
               consulta &&
               obtenerRondaActiva(consulta) && (
-                <PreguntasIA
-                  descripcionOriginal={descripcionOriginal}
-                  ronda={obtenerRondaActiva(consulta)!}
-                  numeroRonda={obtenerRondaActiva(consulta)!.numero_ronda}
-                  cargando={cargando}
-                  onResponder={handleResponderRonda}
-                />
+                <div className="space-y-6">
+                  <PreguntasIA
+                    key={obtenerRondaActiva(consulta)!.id_ronda}
+                    descripcionOriginal={descripcionOriginal}
+                    ronda={obtenerRondaActiva(consulta)!}
+                    numeroRonda={obtenerRondaActiva(consulta)!.numero_ronda}
+                    cargando={cargando}
+                    onResponder={handleResponderRonda}
+                  />
+                  <CancelarConsulta
+                    onConfirmar={handleCancelarConsulta}
+                    deshabilitado={cargando}
+                  />
+                </div>
               )}
             {etapa === "resultado" && consulta && (
               <ResultadoTriage

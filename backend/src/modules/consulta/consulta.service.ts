@@ -103,10 +103,10 @@ export async function crearConsulta(
   try {
     await procesarAnalisis(consulta.id_consulta);
   } catch (error) {
-    // Si el análisis falla, la consulta no debe consumir el límite diario
-    await prisma.consulta.update({
+    // Si el análisis falla, la consulta se borra: no consume el límite ni aparece en el historial.
+    // Es seguro porque las rondas y los síntomas se guardan recién cuando la IA responde.
+    await prisma.consulta.deleteMany({
       where: { id_consulta: consulta.id_consulta },
-      data: { estado: "cancelada" },
     });
     throw error;
   }

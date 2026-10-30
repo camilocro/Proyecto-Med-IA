@@ -26,11 +26,12 @@ async function countConsultasRegistrado(
   start: Date,
   end: Date,
 ): Promise<number> {
+  // Las canceladas también cuentan: la IA ya se usó (igual que para los anónimos).
+  // Las que fallaron por un error de la IA se borran, así que no llegan aquí.
   return prisma.consulta.count({
     where: {
       id_paciente: idPaciente,
       fecha_consulta: { gte: start, lt: end },
-      estado: { not: "cancelada" },
     },
   });
 }
