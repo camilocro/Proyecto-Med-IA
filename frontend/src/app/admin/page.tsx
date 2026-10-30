@@ -8,9 +8,11 @@ import {
   DashboardMetrics,
   ConsultaReciente,
   UsuarioAdmin,
+  EstadisticasAdmin,
 } from "@/services/admin.service";
 import Navbar from "@/components/layout/Navbar";
-import StatsCard from "@/components/admin/StatsCard";
+import StatsCard, { Tendencia } from "@/components/admin/StatsCard";
+import { GraficoBarras, GraficoDonut } from "@/components/admin/Graficos";
 import Sidebar, { SeccionAdmin } from "@/components/admin/Sidebar";
 import UsuariosTable from "@/components/admin/UsuariosTable";
 import {
@@ -93,110 +95,39 @@ function BadgeEstado({ estado }: { estado: string }) {
   );
 }
 
-// ── Gráfico de barras (últimos 7 días) ────────────────────────────────────────
+// ── Subtextos de las tarjetas (HU-032) ───────────────────────────────────────
 
-const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
-function getDiaSemana(offset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - (6 - offset));
-  return DIAS_SEMANA[d.getDay()];
+interface Subtexto {
+  texto: string;
+  tendencia: Tendencia;
 }
 
-function GraficoBarras({ totalHoy }: { totalHoy: number }) {
-  // Genera valores verosímiles basados en el total real de hoy
-  const seed = totalHoy || 20;
-  const valores = [0.65, 0.85, 0.75, 1.1, 0.95, 0.7, 0.5].map((f) =>
-    Math.max(1, Math.round(seed * f)),
-  );
-  const max = Math.max(...valores);
-
-  return (
-    <div className="flex items-end gap-2 h-36 mt-2">
-      {valores.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-          <div
-            className="w-full bg-primary/80 hover:bg-primary rounded-t-lg transition-colors cursor-default"
-            style={{ height: `${(v / max) * 100}%`, minHeight: "4px" }}
-            title={`${v} consultas`}
-          />
-          <span className="text-xs text-gray-400">{getDiaSemana(i)}</span>
-        </div>
-      ))}
-    </div>
-  );
+function compararConAyer(hoy: number, ayer: number): Subtexto {
+  if (ayer === 0) {
+    return hoy === 0
+      ? { texto: "Igual que ayer", tendencia: "neutral" }
+      : { texto: `+${hoy} vs ayer`, tendencia: "sube" };
+  }
+  const variacion = Math.round(((hoy - ayer) / ayer) * 100);
+  if (variacion === 0) return { texto: "Igual que ayer", tendencia: "neutral" };
+  return {
+    texto: `${variacion > 0 ? "+" : ""}${variacion}% vs ayer`,
+    tendencia: variacion > 0 ? "sube" : "baja",
+  };
 }
 
-// ── Gráfico de dona (especialidades) ─────────────────────────────────────────
+function usuariosNuevos(cantidad: number): Subtexto {
+  return cantidad > 0
+    ? { texto: `+${cantidad} esta semana`, tendencia: "sube" }
+    : { texto: "Sin nuevos esta semana", tendencia: "neutral" };
+}
 
-const ESPECIALIDADES = [
-  { nombre: "Neurología", porcentaje: 34, color: "#2563EB" },
-  { nombre: "Cardiología", porcentaje: 22, color: "#1e3a5f" },
-  { nombre: "Medicina general", porcentaje: 28, color: "#16a34a" },
-  { nombre: "Gastroenterología", porcentaje: 16, color: "#d97706" },
-];
-
-function GraficoDonut() {
-  const radio = 50;
-  const circunferencia = 2 * Math.PI * radio;
-
-  let acumulado = 0;
-  const segmentos = ESPECIALIDADES.map((e) => {
-    const largo = (e.porcentaje / 100) * circunferencia - 1.5;
-    const offset = circunferencia - (acumulado / 100) * circunferencia;
-    acumulado += e.porcentaje;
-    return { ...e, largo, offset };
-  });
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-      {/* SVG dona */}
-      <svg viewBox="0 0 120 120" className="w-32 h-32 flex-shrink-0 -rotate-90">
-        <circle
-          cx="60"
-          cy="60"
-          r={radio}
-          fill="none"
-          stroke="#f3f4f6"
-          strokeWidth="22"
-        />
-        {segmentos.map((s, i) => (
-          <circle
-            key={i}
-            cx="60"
-            cy="60"
-            r={radio}
-            fill="none"
-            stroke={s.color}
-            strokeWidth="22"
-            strokeDasharray={`${s.largo} ${circunferencia}`}
-            strokeDashoffset={s.offset}
-          />
-        ))}
-      </svg>
-
-      {/* Leyenda */}
-      <div className="space-y-3 flex-1 w-full sm:w-auto">
-        {ESPECIALIDADES.map((e) => (
-          <div
-            key={e.nombre}
-            className="flex items-center justify-between gap-3"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: e.color }}
-              />
-              <span className="text-sm text-gray-600 truncate">{e.nombre}</span>
-            </div>
-            <span className="text-sm font-semibold text-gray-800 flex-shrink-0">
-              {e.porcentaje}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function especialidadesCubiertas(cantidad: number): Subtexto {
+  return {
+    texto:
+      cantidad === 1 ? "En 1 especialidad" : `En ${cantidad} especialidades`,
+    tendencia: "neutral",
+  };
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -212,6 +143,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 interface EstadoPagina {
   metricas: DashboardMetrics | null;
+  estadisticas: EstadisticasAdmin | null;
   consultas: ConsultaReciente[];
   usuarios: UsuarioAdmin[];
   cargando: boolean;
@@ -226,6 +158,7 @@ const ESTADO_INICIAL: EstadoPagina = {
   cargando: true,
   actualizado: null,
   error: null,
+  estadisticas: null,
 };
 
 // ── Página ────────────────────────────────────────────────────────────────────
@@ -249,14 +182,17 @@ export default function AdminPage() {
     setEstado((prev) => ({ ...prev, cargando: true, error: null }));
 
     try {
-      const [metricas, consultas, usuarios] = await Promise.all([
+      const [metricas, estadisticas, consultas, usuarios] = await Promise.all([
         adminService.getDashboard(),
+        // Si fallan las estadísticas, el resto del panel igual se muestra
+        adminService.getEstadisticas().catch(() => null),
         adminService.getConsultasRecientes(),
         adminService.getUsuarios().catch(() => [] as UsuarioAdmin[]),
       ]);
 
       setEstado({
         metricas,
+        estadisticas,
         consultas,
         usuarios,
         cargando: false,
@@ -292,8 +228,16 @@ export default function AdminPage() {
 
   if (!esAdmin) return null;
 
-  const { metricas, consultas, usuarios, cargando, actualizado, error } =
-    estado;
+  const {
+    metricas,
+    estadisticas,
+    consultas,
+    usuarios,
+    cargando,
+    actualizado,
+    error,
+  } = estado;
+  const resumen = estadisticas?.resumen;
 
   const fechaHoy = new Date().toLocaleDateString("es-BO", {
     weekday: "long",
@@ -395,7 +339,17 @@ export default function AdminPage() {
                   valor={metricas?.consultasHoy ?? 0}
                   icono={ClipboardList}
                   color="azul"
-                  subtexto="+12% vs ayer"
+                  {...(resumen
+                    ? (({ texto, tendencia }) => ({
+                        subtexto: texto,
+                        tendencia,
+                      }))(
+                        compararConAyer(
+                          resumen.consultasHoy,
+                          resumen.consultasAyer,
+                        ),
+                      )
+                    : {})}
                   cargando={cargando && !metricas}
                 />
                 <StatsCard
@@ -403,7 +357,7 @@ export default function AdminPage() {
                   valor={metricas?.urgenciasAltas ?? 0}
                   icono={AlertTriangle}
                   color="rojo"
-                  subtexto="Requieren seguimiento"
+                  subtexto="Hoy, incluye emergencias"
                   cargando={cargando && !metricas}
                 />
                 <StatsCard
@@ -411,7 +365,13 @@ export default function AdminPage() {
                   valor={metricas?.medicosActivos ?? 0}
                   icono={UserCheck}
                   color="verde"
-                  subtexto="En 6 especialidades"
+                  subtexto={
+                    resumen
+                      ? especialidadesCubiertas(
+                          resumen.especialidadesConMedicos,
+                        ).texto
+                      : undefined
+                  }
                   cargando={cargando && !metricas}
                 />
                 <StatsCard
@@ -419,7 +379,16 @@ export default function AdminPage() {
                   valor={metricas?.usuariosRegistrados ?? 0}
                   icono={Users}
                   color="amarillo"
-                  subtexto="+8 esta semana"
+                  subtexto={
+                    resumen
+                      ? usuariosNuevos(resumen.usuariosNuevosSemana).texto
+                      : undefined
+                  }
+                  tendencia={
+                    resumen
+                      ? usuariosNuevos(resumen.usuariosNuevosSemana).tendencia
+                      : "neutral"
+                  }
                   cargando={cargando && !metricas}
                 />
               </section>
@@ -528,14 +497,14 @@ export default function AdminPage() {
                   <h3 className="text-sm font-semibold text-gray-700 mb-1">
                     Consultas por día (últimos 7 días)
                   </h3>
-                  <GraficoBarras totalHoy={metricas?.consultasHoy ?? 20} />
+                  <GraficoBarras datos={estadisticas?.consultasPorDia ?? []} />
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-100 p-6">
                   <h3 className="text-sm font-semibold text-gray-700 mb-4">
                     Distribución por especialidad
                   </h3>
-                  <GraficoDonut />
+                  <GraficoDonut datos={estadisticas?.porEspecialidad ?? []} />
                 </div>
               </section>
             </>
