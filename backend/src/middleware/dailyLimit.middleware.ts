@@ -6,11 +6,19 @@ import { AuthenticatedRequest } from "../shared/types";
 import { getTodayRange } from "../shared/fechas";
 import { obtenerIdentificadorAnonimo } from "../shared/sesion";
 
+export interface UsoDiario {
+  limite: number;
+  usadas: number;
+  restantes: number;
+  reinicio: string; // ISO: momento en que el contador vuelve a cero
+}
+
 async function getDailyLimit(): Promise<number> {
   const config = await prisma.configuracionSistema.findUnique({
     where: { clave: CONFIG_KEY_DAILY_LIMIT },
   });
-  return config ? parseInt(config.valor) : DEFAULT_DAILY_LIMIT;
+  const limite = Number(config?.valor);
+  return Number.isInteger(limite) && limite > 0 ? limite : DEFAULT_DAILY_LIMIT;
 }
 
 async function countConsultasRegistrado(
@@ -18,11 +26,12 @@ async function countConsultasRegistrado(
   start: Date,
   end: Date,
 ): Promise<number> {
+  // Las canceladas también cuentan: la IA ya se usó (igual que para los anónimos).
+  // Las que fallaron por un error de la IA se borran, así que no llegan aquí.
   return prisma.consulta.count({
     where: {
       id_paciente: idPaciente,
       fecha_consulta: { gte: start, lt: end },
-      estado: { not: "cancelada" },
     },
   });
 }
@@ -37,42 +46,54 @@ async function countConsultasAnonimo(
   return registro?.cantidad ?? 0;
 }
 
-/**
- * Controla que ningún usuario (registrado o anónimo) supere
- * el límite diario de consultas definido en ConfiguracionSistema.
- */
-export async function checkDailyLimit(
+async function contarConsultasDeHoy(
   req: Request,
-  _res: Response,
-  next: NextFunction,
-) {
-  const limite = await getDailyLimit();
-  const { start, end } = getTodayRange();
+  start: Date,
+  end: Date,
+): Promise<number> {
   const usuario = (req as AuthenticatedRequest).usuario;
 
   if (usuario) {
     const paciente = await prisma.paciente.findUnique({
       where: { id_usuario: usuario.id_usuario },
     });
-    if (paciente) {
-      const cantidad = await countConsultasRegistrado(
-        paciente.id_paciente,
-        start,
-        end,
-      );
-      if (cantidad >= limite)
-        return next(
-          tooManyRequest(`Límite de ${limite} consultas diarias alcanzado`),
-        );
-    }
-  } else {
-    const sesionId = obtenerIdentificadorAnonimo(req);
-    const cantidad = await countConsultasAnonimo(sesionId, start);
-    if (cantidad >= limite)
-      return next(
-        tooManyRequest(`Límite de ${limite} consultas diarias alcanzado`),
-      );
+    // Médicos y administradores no hacen triage: el controller los rechaza
+    if (!paciente) return 0;
+    return countConsultasRegistrado(paciente.id_paciente, start, end);
   }
 
+  return countConsultasAnonimo(obtenerIdentificadorAnonimo(req), start);
+}
+
+/**
+ * Calcula el uso del día para quien hace la petición (registrado o anónimo).
+ * Lo usan el middleware (para bloquear) y GET /consultas/restantes (para informar),
+ * así el contador del frontend y el bloqueo del backend nunca se contradicen.
+ */
+export async function calcularUsoDiario(req: Request): Promise<UsoDiario> {
+  const limite = await getDailyLimit();
+  const { start, end } = getTodayRange();
+  const usadas = await contarConsultasDeHoy(req, start, end);
+
+  return {
+    limite,
+    usadas,
+    restantes: Math.max(0, limite - usadas),
+    reinicio: end.toISOString(),
+  };
+}
+
+/** RN-001: nadie (registrado o anónimo) supera el límite diario configurado. */
+export async function checkDailyLimit(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  const uso = await calcularUsoDiario(req);
+  if (uso.restantes === 0) {
+    return next(
+      tooManyRequest(`Límite de ${uso.limite} consultas diarias alcanzado`),
+    );
+  }
   next();
 }

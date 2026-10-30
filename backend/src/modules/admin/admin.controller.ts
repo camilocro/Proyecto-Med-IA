@@ -6,6 +6,7 @@ import {
   cambiarEstadoUsuario,
   getConfiguracion,
   setConfiguracion,
+  getEstadisticas,
 } from "./admin.service";
 import { ok, AuthenticatedRequest } from "../../shared/types";
 import { badRequest } from "../../errors/AppError";
@@ -55,4 +56,8 @@ export async function actualizarConfiguracion(req: Request, res: Response) {
   }
   const config = await setConfiguracion(clave.trim(), String(valor).trim());
   res.json(ok(config));
+}
+
+export async function estadisticas(_req: Request, res: Response) {
+  res.json(ok(await getEstadisticas()));
 }

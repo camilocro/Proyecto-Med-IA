@@ -1,106 +1,148 @@
-'use client'
+"use client";
 
-import { useState }                from 'react'
-import { Consulta, RondaPreguntas } from '@/types'
-import { triageService }            from '@/services/triage.service'
-import Navbar                       from '@/components/layout/Navbar'
-import Footer                       from '@/components/layout/Footer'
-import SintomasForm                 from '@/components/triage/SintomasForm'
-import PreguntasIA                  from '@/components/triage/PreguntasIA'
-import ResultadoTriage              from '@/components/triage/ResultadoTriage'
-import { AlertCircle }              from 'lucide-react'
+import { useState, useEffect, useCallback } from "react";
+import { Consulta, RondaPreguntas } from "@/types";
+import { triageService, ContadorConsultas } from "@/services/triage.service";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import SintomasForm from "@/components/triage/SintomasForm";
+import PreguntasIA from "@/components/triage/PreguntasIA";
+import ResultadoTriage from "@/components/triage/ResultadoTriage";
+import { AlertCircle } from "lucide-react";
+import CancelarConsulta from "@/components/triage/CancelarConsulta";
 
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
 
-type EtapaConsulta = 'sintomas' | 'preguntas' | 'resultado'
+type EtapaConsulta = "sintomas" | "preguntas" | "resultado";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function obtenerRondaActiva(consulta: Consulta): RondaPreguntas | null {
-  if (!consulta.rondas?.length) return null
-  return consulta.rondas[consulta.rondas.length - 1]
+  if (!consulta.rondas?.length) return null;
+  return consulta.rondas[consulta.rondas.length - 1];
 }
 
 function determinarEtapa(consulta: Consulta): EtapaConsulta {
-  if (consulta.estado === 'completada')           return 'resultado'
-  if (consulta.estado === 'esperando_respuestas') return 'preguntas'
-  return 'sintomas'
+  if (consulta.estado === "completada") return "resultado";
+  if (consulta.estado === "esperando_respuestas") return "preguntas";
+  return "sintomas";
 }
 
 // ─── Componente principal ──────────────────────────────────────────────────────
 
 export default function ConsultaPage() {
-  const [etapa,               setEtapa]              = useState<EtapaConsulta>('sintomas')
-  const [consulta,            setConsulta]           = useState<Consulta | null>(null)
-  const [descripcionOriginal, setDescripcionOriginal] = useState('')
-  const [cargando,            setCargando]           = useState(false)
-  const [error,               setError]              = useState<string | null>(null)
-  const [consultasRestantes,  setConsultasRestantes] = useState(5)
+  const [etapa, setEtapa] = useState<EtapaConsulta>("sintomas");
+  const [consulta, setConsulta] = useState<Consulta | null>(null);
+  const [descripcionOriginal, setDescripcionOriginal] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [contador, setContador] = useState<ContadorConsultas | null>(null);
+
+  // El backend es la fuente del contador: se pide al entrar y después de cada consulta
+  const cargarContador = useCallback(() => {
+    triageService
+      .obtenerRestantes()
+      .then(setContador)
+      .catch(() => setContador(null));
+  }, []);
+
+  useEffect(() => {
+    cargarContador();
+  }, [cargarContador]);
 
   async function handleIniciarConsulta(descripcion: string) {
-    setCargando(true)
-    setError(null)
+    setCargando(true);
+    setError(null);
 
-    const resultado = await triageService.iniciarConsulta(descripcion)
+    const resultado = await triageService
+      .iniciarConsulta(descripcion)
       .catch((err) => {
-        setError(err.response?.data?.message ?? 'Error al iniciar la consulta. Intentá de nuevo.')
-        return null
+        setError(
+          err.response?.data?.message ??
+            "Error al iniciar la consulta. Intentá de nuevo.",
+        );
+        return null;
       })
-      .finally(() => setCargando(false))
+      .finally(() => setCargando(false));
 
-    if (!resultado) return
+    cargarContador(); // también si falló: un 429 actualiza el aviso de límite
 
-    setDescripcionOriginal(descripcion)
-    setConsulta(resultado)
-    setConsultasRestantes((prev) => prev - 1)
-    setEtapa(determinarEtapa(resultado))
+    if (!resultado) return;
+
+    setDescripcionOriginal(descripcion);
+    setConsulta(resultado);
+    setEtapa(determinarEtapa(resultado));
   }
 
-  async function handleResponderRonda(respuestas: { id_pr: number; respuesta: string }[]) {
-    if (!consulta) return
-    const rondaActiva = obtenerRondaActiva(consulta)
-    if (!rondaActiva) return
+  async function handleResponderRonda(
+    respuestas: { id_pr: number; respuesta: string }[],
+  ) {
+    if (!consulta) return;
+    const rondaActiva = obtenerRondaActiva(consulta);
+    if (!rondaActiva) return;
 
-    setCargando(true)
-    setError(null)
+    setCargando(true);
+    setError(null);
 
-    const resultado = await triageService.responderRonda(
-      consulta.id_consulta,
-      rondaActiva.id_ronda,
-      respuestas,
-    ).catch((err) => {
-      setError(err.response?.data?.message ?? 'Error al enviar las respuestas. Intentá de nuevo.')
-      return null
-    }).finally(() => setCargando(false))
+    const resultado = await triageService
+      .responderRonda(consulta.id_consulta, rondaActiva.id_ronda, respuestas)
+      .catch((err) => {
+        setError(
+          err.response?.data?.message ??
+            "Error al enviar las respuestas. Intentá de nuevo.",
+        );
+        return null;
+      })
+      .finally(() => setCargando(false));
 
-    if (!resultado) return
-    setConsulta(resultado)
-    setEtapa(determinarEtapa(resultado))
+    if (!resultado) return;
+    setConsulta(resultado);
+    setEtapa(determinarEtapa(resultado));
   }
 
   function handleNuevaConsulta() {
-    setEtapa('sintomas')
-    setConsulta(null)
-    setDescripcionOriginal('')
-    setError(null)
+    setEtapa("sintomas");
+    setConsulta(null);
+    setDescripcionOriginal("");
+    setError(null);
+    cargarContador();
+  }
+
+  async function handleCancelarConsulta() {
+    if (!consulta) return;
+    setError(null);
+
+    const cancelada = await triageService
+      .cancelarConsulta(consulta.id_consulta)
+      .then(() => true)
+      .catch((err) => {
+        setError(
+          err.response?.data?.message ??
+            "No se pudo cancelar la consulta. Intentá de nuevo.",
+        );
+        return false;
+      });
+
+    if (cancelada) handleNuevaConsulta(); // vuelve al inicio y recarga el contador
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   const TITULOS: Record<EtapaConsulta, string> = {
-    sintomas:  '¿Cómo te sentís hoy?',
-    preguntas: 'Un par de preguntas más',
-    resultado: 'Resultado de tu consulta',
-  }
+    sintomas: "¿Cómo te sentís hoy?",
+    preguntas: "Un par de preguntas más",
+    resultado: "Resultado de tu consulta",
+  };
 
   const SUBTITULOS: Record<EtapaConsulta, string> = {
-    sintomas:  'Describí tus síntomas en lenguaje natural, sin necesidad de términos médicos.',
-    preguntas: 'Necesitamos un poco más de información para orientarte mejor.',
-    resultado: 'Basándonos en lo que describiste, esto es lo que encontramos.',
-  }
+    sintomas:
+      "Describí tus síntomas en lenguaje natural, sin necesidad de términos médicos.",
+    preguntas: "Necesitamos un poco más de información para orientarte mejor.",
+    resultado: "Basándonos en lo que describiste, esto es lo que encontramos.",
+  };
 
-  const PASOS: EtapaConsulta[] = ['sintomas', 'preguntas', 'resultado']
-  const indiceActual = PASOS.indexOf(etapa)
+  const PASOS: EtapaConsulta[] = ["sintomas", "preguntas", "resultado"];
+  const indiceActual = PASOS.indexOf(etapa);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -108,7 +150,6 @@ export default function ConsultaPage() {
 
       <main className="flex-1">
         <div className="max-w-2xl mx-auto px-4 py-10">
-
           {/* Indicador de progreso */}
           <div className="flex items-center justify-center gap-2 mb-8">
             {PASOS.map((paso, index) => (
@@ -116,16 +157,18 @@ export default function ConsultaPage() {
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                     index < indiceActual
-                      ? 'bg-green-500 text-white'
+                      ? "bg-green-500 text-white"
                       : index === indiceActual
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-200 text-gray-400'
+                        ? "bg-primary text-white"
+                        : "bg-gray-200 text-gray-400"
                   }`}
                 >
-                  {index < indiceActual ? '✓' : index + 1}
+                  {index < indiceActual ? "✓" : index + 1}
                 </div>
                 {index < PASOS.length - 1 && (
-                  <div className={`w-12 h-0.5 ${index < indiceActual ? 'bg-green-500' : 'bg-gray-200'}`} />
+                  <div
+                    className={`w-12 h-0.5 ${index < indiceActual ? "bg-green-500" : "bg-gray-200"}`}
+                  />
                 )}
               </div>
             ))}
@@ -133,7 +176,9 @@ export default function ConsultaPage() {
 
           {/* Encabezado */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-primary">{TITULOS[etapa]}</h1>
+            <h1 className="text-2xl font-bold text-primary">
+              {TITULOS[etapa]}
+            </h1>
             <p className="text-gray-500 mt-2">{SUBTITULOS[etapa]}</p>
           </div>
 
@@ -147,34 +192,42 @@ export default function ConsultaPage() {
 
           {/* Contenido según etapa */}
           <div className="card p-6">
-            {etapa === 'sintomas' && (
+            {etapa === "sintomas" && (
               <SintomasForm
                 onSubmit={handleIniciarConsulta}
                 cargando={cargando}
-                consultasRestantes={consultasRestantes}
+                contador={contador}
               />
             )}
-            {etapa === 'preguntas' && consulta && obtenerRondaActiva(consulta) && (
-              <PreguntasIA
-                descripcionOriginal={descripcionOriginal}
-                ronda={obtenerRondaActiva(consulta)!}
-                numeroRonda={obtenerRondaActiva(consulta)!.numero_ronda}
-                cargando={cargando}
-                onResponder={handleResponderRonda}
-              />
-            )}
-            {etapa === 'resultado' && consulta && (
+            {etapa === "preguntas" &&
+              consulta &&
+              obtenerRondaActiva(consulta) && (
+                <div className="space-y-6">
+                  <PreguntasIA
+                    key={obtenerRondaActiva(consulta)!.id_ronda}
+                    descripcionOriginal={descripcionOriginal}
+                    ronda={obtenerRondaActiva(consulta)!}
+                    numeroRonda={obtenerRondaActiva(consulta)!.numero_ronda}
+                    cargando={cargando}
+                    onResponder={handleResponderRonda}
+                  />
+                  <CancelarConsulta
+                    onConfirmar={handleCancelarConsulta}
+                    deshabilitado={cargando}
+                  />
+                </div>
+              )}
+            {etapa === "resultado" && consulta && (
               <ResultadoTriage
                 consulta={consulta}
                 onNuevaConsulta={handleNuevaConsulta}
               />
             )}
           </div>
-
         </div>
       </main>
 
       <Footer />
     </div>
-  )
+  );
 }

@@ -37,3 +37,5 @@ export const MAX_CONSULTAS_RECIENTES_ADMIN = 20;
 export const MIN_LONGITUD_NOMBRE = 2;
 export const MAX_LONGITUD_NOMBRE = 100;
 export const MIN_LONGITUD_PASSWORD = 8;
+
+export const DIAS_GRAFICO_CONSULTAS = 7;

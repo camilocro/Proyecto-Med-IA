@@ -1,18 +1,20 @@
-'use client'
+"use client";
 
-import React, { useEffect, useState, useCallback } from 'react'
-import { useRouter }   from 'next/navigation'
-import { useAuth }     from '@/hooks/useAuth'
+import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 import {
   adminService,
   DashboardMetrics,
   ConsultaReciente,
   UsuarioAdmin,
-} from '@/services/admin.service'
-import Navbar        from '@/components/layout/Navbar'
-import StatsCard     from '@/components/admin/StatsCard'
-import Sidebar, { SeccionAdmin } from '@/components/admin/Sidebar'
-import UsuariosTable from '@/components/admin/UsuariosTable'
+  EstadisticasAdmin,
+} from "@/services/admin.service";
+import Navbar from "@/components/layout/Navbar";
+import StatsCard, { Tendencia } from "@/components/admin/StatsCard";
+import { GraficoBarras, GraficoDonut } from "@/components/admin/Graficos";
+import Sidebar, { SeccionAdmin } from "@/components/admin/Sidebar";
+import UsuariosTable from "@/components/admin/UsuariosTable";
 import {
   ClipboardList,
   AlertTriangle,
@@ -21,232 +23,196 @@ import {
   RefreshCw,
   Clock,
   AlertCircle,
-} from 'lucide-react'
+} from "lucide-react";
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
 
 function formatearFechaCorta(iso: string): string {
-  return new Date(iso).toLocaleString('es-BO', {
-    day:    '2-digit',
-    month:  'short',
-    hour:   '2-digit',
-    minute: '2-digit',
-  })
+  return new Date(iso).toLocaleString("es-BO", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 
 const URGENCIA_CLASES: Record<string, string> = {
-  alto:       'bg-red-100 text-red-700',
-  medio:      'bg-amber-100 text-amber-700',
-  bajo:       'bg-green-100 text-green-700',
-  emergencia: 'bg-purple-100 text-purple-700',
-}
+  alto: "bg-red-100 text-red-700",
+  medio: "bg-amber-100 text-amber-700",
+  bajo: "bg-green-100 text-green-700",
+  emergencia: "bg-purple-100 text-purple-700",
+};
 
 const URGENCIA_PUNTO: Record<string, string> = {
-  alto: 'bg-red-500', medio: 'bg-amber-500', bajo: 'bg-green-500', emergencia: 'bg-purple-500',
-}
+  alto: "bg-red-500",
+  medio: "bg-amber-500",
+  bajo: "bg-green-500",
+  emergencia: "bg-purple-500",
+};
 
 const URGENCIA_LABEL: Record<string, string> = {
-  alto: 'Alta', medio: 'Media', bajo: 'Baja', emergencia: 'Emergencia',
-}
+  alto: "Alta",
+  medio: "Media",
+  bajo: "Baja",
+  emergencia: "Emergencia",
+};
 
 function BadgeUrgencia({ nivel }: { nivel: string | null }) {
-  if (!nivel) return <span className="text-gray-300 text-xs">—</span>
+  if (!nivel) return <span className="text-gray-300 text-xs">—</span>;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full
-      ${URGENCIA_CLASES[nivel] ?? 'bg-gray-100 text-gray-600'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${URGENCIA_PUNTO[nivel] ?? 'bg-gray-400'}`} />
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full
+      ${URGENCIA_CLASES[nivel] ?? "bg-gray-100 text-gray-600"}`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${URGENCIA_PUNTO[nivel] ?? "bg-gray-400"}`}
+      />
       {URGENCIA_LABEL[nivel] ?? nivel}
     </span>
-  )
+  );
 }
+
+const ESTADO_BADGE: Record<string, { texto: string; clases: string }> = {
+  completada: { texto: "Completada", clases: "bg-green-100 text-green-700" },
+  cancelada: { texto: "Cancelada", clases: "bg-red-100 text-red-700" },
+  esperando_respuestas: {
+    texto: "Esperando respuestas",
+    clases: "bg-amber-100 text-amber-700",
+  },
+  en_proceso: { texto: "En proceso", clases: "bg-blue-100 text-blue-700" },
+};
 
 function BadgeEstado({ estado }: { estado: string }) {
-  const esCompletada = estado === 'completada'
+  const badge = ESTADO_BADGE[estado] ?? ESTADO_BADGE.en_proceso;
   return (
-    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-      esCompletada ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-    }`}>
-      {esCompletada ? 'Completada' : 'En proceso'}
+    <span
+      className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${badge.clases}`}
+    >
+      {badge.texto}
     </span>
-  )
+  );
 }
 
-// ── Gráfico de barras (últimos 7 días) ────────────────────────────────────────
+// ── Subtextos de las tarjetas (HU-032) ───────────────────────────────────────
 
-const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-
-function getDiaSemana(offset: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - (6 - offset))
-  return DIAS_SEMANA[d.getDay()]
+interface Subtexto {
+  texto: string;
+  tendencia: Tendencia;
 }
 
-function GraficoBarras({ totalHoy }: { totalHoy: number }) {
-  // Genera valores verosímiles basados en el total real de hoy
-  const seed = totalHoy || 20
-  const valores = [0.65, 0.85, 0.75, 1.1, 0.95, 0.7, 0.5].map((f) =>
-    Math.max(1, Math.round(seed * f)),
-  )
-  const max = Math.max(...valores)
-
-  return (
-    <div className="flex items-end gap-2 h-36 mt-2">
-      {valores.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-          <div
-            className="w-full bg-primary/80 hover:bg-primary rounded-t-lg transition-colors cursor-default"
-            style={{ height: `${(v / max) * 100}%`, minHeight: '4px' }}
-            title={`${v} consultas`}
-          />
-          <span className="text-xs text-gray-400">{getDiaSemana(i)}</span>
-        </div>
-      ))}
-    </div>
-  )
+function compararConAyer(hoy: number, ayer: number): Subtexto {
+  if (ayer === 0) {
+    return hoy === 0
+      ? { texto: "Igual que ayer", tendencia: "neutral" }
+      : { texto: `+${hoy} vs ayer`, tendencia: "sube" };
+  }
+  const variacion = Math.round(((hoy - ayer) / ayer) * 100);
+  if (variacion === 0) return { texto: "Igual que ayer", tendencia: "neutral" };
+  return {
+    texto: `${variacion > 0 ? "+" : ""}${variacion}% vs ayer`,
+    tendencia: variacion > 0 ? "sube" : "baja",
+  };
 }
 
-// ── Gráfico de dona (especialidades) ─────────────────────────────────────────
+function usuariosNuevos(cantidad: number): Subtexto {
+  return cantidad > 0
+    ? { texto: `+${cantidad} esta semana`, tendencia: "sube" }
+    : { texto: "Sin nuevos esta semana", tendencia: "neutral" };
+}
 
-const ESPECIALIDADES = [
-  { nombre: 'Neurología',        porcentaje: 34, color: '#2563EB' },
-  { nombre: 'Cardiología',       porcentaje: 22, color: '#1e3a5f' },
-  { nombre: 'Medicina general',  porcentaje: 28, color: '#16a34a' },
-  { nombre: 'Gastroenterología', porcentaje: 16, color: '#d97706' },
-]
-
-function GraficoDonut() {
-  const radio          = 50
-  const circunferencia = 2 * Math.PI * radio
-
-  let acumulado = 0
-  const segmentos = ESPECIALIDADES.map((e) => {
-    const largo  = (e.porcentaje / 100) * circunferencia - 1.5
-    const offset = circunferencia - (acumulado / 100) * circunferencia
-    acumulado   += e.porcentaje
-    return { ...e, largo, offset }
-  })
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-      {/* SVG dona */}
-      <svg viewBox="0 0 120 120" className="w-32 h-32 flex-shrink-0 -rotate-90">
-        <circle
-          cx="60" cy="60" r={radio}
-          fill="none" stroke="#f3f4f6" strokeWidth="22"
-        />
-        {segmentos.map((s, i) => (
-          <circle
-            key={i}
-            cx="60" cy="60" r={radio}
-            fill="none"
-            stroke={s.color}
-            strokeWidth="22"
-            strokeDasharray={`${s.largo} ${circunferencia}`}
-            strokeDashoffset={s.offset}
-          />
-        ))}
-      </svg>
-
-      {/* Leyenda */}
-      <div className="space-y-3 flex-1 w-full sm:w-auto">
-        {ESPECIALIDADES.map((e) => (
-          <div key={e.nombre} className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: e.color }}
-              />
-              <span className="text-sm text-gray-600 truncate">{e.nombre}</span>
-            </div>
-            <span className="text-sm font-semibold text-gray-800 flex-shrink-0">
-              {e.porcentaje}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+function especialidadesCubiertas(cantidad: number): Subtexto {
+  return {
+    texto:
+      cantidad === 1 ? "En 1 especialidad" : `En ${cantidad} especialidades`,
+    tendencia: "neutral",
+  };
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-type Tab = SeccionAdmin
+type Tab = SeccionAdmin;
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard'  },
-  { id: 'usuarios',  label: 'Usuarios'   },
-]
+  { id: "dashboard", label: "Dashboard" },
+  { id: "usuarios", label: "Usuarios" },
+];
 
 // ── Estado de la página ───────────────────────────────────────────────────────
 
 interface EstadoPagina {
-  metricas:    DashboardMetrics | null
-  consultas:   ConsultaReciente[]
-  usuarios:    UsuarioAdmin[]
-  cargando:    boolean
-  actualizado: Date | null
-  error:       string | null
+  metricas: DashboardMetrics | null;
+  estadisticas: EstadisticasAdmin | null;
+  consultas: ConsultaReciente[];
+  usuarios: UsuarioAdmin[];
+  cargando: boolean;
+  actualizado: Date | null;
+  error: string | null;
 }
 
 const ESTADO_INICIAL: EstadoPagina = {
-  metricas:    null,
-  consultas:   [],
-  usuarios:    [],
-  cargando:    true,
+  metricas: null,
+  consultas: [],
+  usuarios: [],
+  cargando: true,
   actualizado: null,
-  error:       null,
-}
+  error: null,
+  estadisticas: null,
+};
 
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const { usuario, cargando: cargandoAuth, esAdmin } = useAuth()
-  const router = useRouter()
+  const { usuario, cargando: cargandoAuth, esAdmin } = useAuth();
+  const router = useRouter();
 
-  const [estado,  setEstado]  = useState<EstadoPagina>(ESTADO_INICIAL)
-  const [tabActiva, setTabActiva] = useState<Tab>('dashboard')
+  const [estado, setEstado] = useState<EstadoPagina>(ESTADO_INICIAL);
+  const [tabActiva, setTabActiva] = useState<Tab>("dashboard");
 
   // Redirigir si no es admin
   useEffect(() => {
     if (!cargandoAuth && (!usuario || !esAdmin)) {
-      router.replace('/')
+      router.replace("/");
     }
-  }, [cargandoAuth, usuario, esAdmin, router])
+  }, [cargandoAuth, usuario, esAdmin, router]);
 
   // Cargar datos del servidor
   const cargarDatos = useCallback(async () => {
-    setEstado((prev) => ({ ...prev, cargando: true, error: null }))
+    setEstado((prev) => ({ ...prev, cargando: true, error: null }));
 
     try {
-      const [metricas, consultas, usuarios] = await Promise.all([
+      const [metricas, estadisticas, consultas, usuarios] = await Promise.all([
         adminService.getDashboard(),
+        // Si fallan las estadísticas, el resto del panel igual se muestra
+        adminService.getEstadisticas().catch(() => null),
         adminService.getConsultasRecientes(),
         adminService.getUsuarios().catch(() => [] as UsuarioAdmin[]),
-      ])
+      ]);
 
       setEstado({
         metricas,
+        estadisticas,
         consultas,
         usuarios,
-        cargando:    false,
+        cargando: false,
         actualizado: new Date(),
-        error:       null,
-      })
+        error: null,
+      });
     } catch {
       // Sin esto el panel quedaba cargando indefinidamente si el backend fallaba
       setEstado((prev) => ({
         ...prev,
         cargando: false,
-        error:    'No se pudieron cargar los datos del panel. Verificá tu conexión e intentá de nuevo.',
-      }))
+        error:
+          "No se pudieron cargar los datos del panel. Verificá tu conexión e intentá de nuevo.",
+      }));
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    if (!cargandoAuth && esAdmin) cargarDatos()
-  }, [cargandoAuth, esAdmin, cargarDatos])
+    if (!cargandoAuth && esAdmin) cargarDatos();
+  }, [cargandoAuth, esAdmin, cargarDatos]);
 
   // ── Pantalla de carga ──────────────────────────────────────────────────────
   if (cargandoAuth) {
@@ -257,19 +223,28 @@ export default function AdminPage() {
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
-    )
+    );
   }
 
-  if (!esAdmin) return null
+  if (!esAdmin) return null;
 
-  const { metricas, consultas, usuarios, cargando, actualizado, error } = estado
+  const {
+    metricas,
+    estadisticas,
+    consultas,
+    usuarios,
+    cargando,
+    actualizado,
+    error,
+  } = estado;
+  const resumen = estadisticas?.resumen;
 
-  const fechaHoy = new Date().toLocaleDateString('es-BO', {
-    weekday: 'long',
-    day:     'numeric',
-    month:   'long',
-    year:    'numeric',
-  })
+  const fechaHoy = new Date().toLocaleDateString("es-BO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -282,22 +257,23 @@ export default function AdminPage() {
       <Sidebar seccionActiva={tabActiva} onCambiarSeccion={setTabActiva} />
 
       <div className="flex-1 flex flex-col min-w-0">
-
         {/* ── Topbar ── */}
         <header className="bg-white border-b border-gray-100 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Panel Administrativo</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              Panel Administrativo
+            </h1>
             <p className="text-sm text-gray-400 capitalize">{fechaHoy}</p>
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
             {actualizado && (
               <span className="text-xs text-gray-400 hidden md:block">
-                Actualizado: {actualizado.toLocaleTimeString('es-BO')}
+                Actualizado: {actualizado.toLocaleTimeString("es-BO")}
               </span>
             )}
             <span className="text-sm font-medium text-gray-700 bg-gray-100 px-4 py-2 rounded-xl">
-              Buenos días, {usuario?.nombre.split(' ')[0]}
+              Buenos días, {usuario?.nombre.split(" ")[0]}
             </span>
             <button
               onClick={cargarDatos}
@@ -306,7 +282,9 @@ export default function AdminPage() {
               className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors
                          disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <RefreshCw className={`w-4 h-4 ${cargando ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-4 h-4 ${cargando ? "animate-spin" : ""}`}
+              />
             </button>
           </div>
         </header>
@@ -320,8 +298,8 @@ export default function AdminPage() {
                 onClick={() => setTabActiva(id)}
                 className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
                   tabActiva === id
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? "border-primary text-primary"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 {label}
@@ -331,10 +309,12 @@ export default function AdminPage() {
         </div>
 
         <main className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8">
-
           {/* Error al cargar datos */}
           {error && (
-            <div role="alert" className="flex items-start justify-between gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-3 bg-red-50 border border-red-200 rounded-xl p-4"
+            >
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-700">{error}</p>
@@ -350,7 +330,7 @@ export default function AdminPage() {
           )}
 
           {/* ══ TAB DASHBOARD ══════════════════════════════════════════════ */}
-          {tabActiva === 'dashboard' && (
+          {tabActiva === "dashboard" && (
             <>
               {/* Tarjetas de métricas */}
               <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -359,7 +339,17 @@ export default function AdminPage() {
                   valor={metricas?.consultasHoy ?? 0}
                   icono={ClipboardList}
                   color="azul"
-                  subtexto="+12% vs ayer"
+                  {...(resumen
+                    ? (({ texto, tendencia }) => ({
+                        subtexto: texto,
+                        tendencia,
+                      }))(
+                        compararConAyer(
+                          resumen.consultasHoy,
+                          resumen.consultasAyer,
+                        ),
+                      )
+                    : {})}
                   cargando={cargando && !metricas}
                 />
                 <StatsCard
@@ -367,7 +357,7 @@ export default function AdminPage() {
                   valor={metricas?.urgenciasAltas ?? 0}
                   icono={AlertTriangle}
                   color="rojo"
-                  subtexto="Requieren seguimiento"
+                  subtexto="Hoy, incluye emergencias"
                   cargando={cargando && !metricas}
                 />
                 <StatsCard
@@ -375,7 +365,13 @@ export default function AdminPage() {
                   valor={metricas?.medicosActivos ?? 0}
                   icono={UserCheck}
                   color="verde"
-                  subtexto="En 6 especialidades"
+                  subtexto={
+                    resumen
+                      ? especialidadesCubiertas(
+                          resumen.especialidadesConMedicos,
+                        ).texto
+                      : undefined
+                  }
                   cargando={cargando && !metricas}
                 />
                 <StatsCard
@@ -383,7 +379,16 @@ export default function AdminPage() {
                   valor={metricas?.usuariosRegistrados ?? 0}
                   icono={Users}
                   color="amarillo"
-                  subtexto="+8 esta semana"
+                  subtexto={
+                    resumen
+                      ? usuariosNuevos(resumen.usuariosNuevosSemana).texto
+                      : undefined
+                  }
+                  tendencia={
+                    resumen
+                      ? usuariosNuevos(resumen.usuariosNuevosSemana).tendencia
+                      : "neutral"
+                  }
                   cargando={cargando && !metricas}
                 />
               </section>
@@ -403,7 +408,10 @@ export default function AdminPage() {
                 {cargando && consultas.length === 0 ? (
                   <div className="divide-y divide-gray-50">
                     {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="px-6 py-4 flex items-center gap-4 animate-pulse">
+                      <div
+                        key={i}
+                        className="px-6 py-4 flex items-center gap-4 animate-pulse"
+                      >
                         <div className="h-4 bg-gray-200 rounded w-28" />
                         <div className="h-4 bg-gray-200 rounded flex-1" />
                         <div className="h-4 bg-gray-200 rounded w-24" />
@@ -416,26 +424,43 @@ export default function AdminPage() {
                 ) : consultas.length === 0 ? (
                   <div className="py-16 text-center text-gray-400">
                     <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">No hay consultas registradas todavía.</p>
+                    <p className="text-sm">
+                      No hay consultas registradas todavía.
+                    </p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[720px]">
                       <thead className="bg-gray-50">
                         <tr className="text-xs text-gray-400 uppercase tracking-wider">
-                          <th className="px-6 py-3 text-left font-medium">Usuario</th>
-                          <th className="px-6 py-3 text-left font-medium">Síntomas</th>
-                          <th className="px-6 py-3 text-left font-medium">Especialidad</th>
-                          <th className="px-6 py-3 text-left font-medium">Urgencia</th>
-                          <th className="px-6 py-3 text-left font-medium">Fecha</th>
-                          <th className="px-6 py-3 text-left font-medium">Estado</th>
+                          <th className="px-6 py-3 text-left font-medium">
+                            Usuario
+                          </th>
+                          <th className="px-6 py-3 text-left font-medium">
+                            Síntomas
+                          </th>
+                          <th className="px-6 py-3 text-left font-medium">
+                            Especialidad
+                          </th>
+                          <th className="px-6 py-3 text-left font-medium">
+                            Urgencia
+                          </th>
+                          <th className="px-6 py-3 text-left font-medium">
+                            Fecha
+                          </th>
+                          <th className="px-6 py-3 text-left font-medium">
+                            Estado
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {consultas.map((c) => (
-                          <tr key={c.id_consulta} className="hover:bg-gray-50/60 transition-colors">
+                          <tr
+                            key={c.id_consulta}
+                            className="hover:bg-gray-50/60 transition-colors"
+                          >
                             <td className="px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap">
-                              {c.paciente?.usuario?.nombre ?? 'Anónimo'}
+                              {c.paciente?.usuario?.nombre ?? "Anónimo"}
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px]">
                               <span className="truncate block">
@@ -472,21 +497,21 @@ export default function AdminPage() {
                   <h3 className="text-sm font-semibold text-gray-700 mb-1">
                     Consultas por día (últimos 7 días)
                   </h3>
-                  <GraficoBarras totalHoy={metricas?.consultasHoy ?? 20} />
+                  <GraficoBarras datos={estadisticas?.consultasPorDia ?? []} />
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-100 p-6">
                   <h3 className="text-sm font-semibold text-gray-700 mb-4">
                     Distribución por especialidad
                   </h3>
-                  <GraficoDonut />
+                  <GraficoDonut datos={estadisticas?.porEspecialidad ?? []} />
                 </div>
               </section>
             </>
           )}
 
           {/* ══ TAB USUARIOS ═══════════════════════════════════════════════ */}
-          {tabActiva === 'usuarios' && (
+          {tabActiva === "usuarios" && (
             <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
@@ -501,7 +526,10 @@ export default function AdminPage() {
               {cargando && usuarios.length === 0 ? (
                 <div className="divide-y divide-gray-50">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="px-6 py-4 flex items-center gap-4 animate-pulse">
+                    <div
+                      key={i}
+                      className="px-6 py-4 flex items-center gap-4 animate-pulse"
+                    >
                       <div className="h-4 bg-gray-200 rounded w-32" />
                       <div className="h-4 bg-gray-200 rounded flex-1" />
                       <div className="h-6 bg-gray-200 rounded w-20" />
@@ -520,9 +548,8 @@ export default function AdminPage() {
               )}
             </section>
           )}
-
         </main>
       </div>
     </div>
-  )
+  );
 }
