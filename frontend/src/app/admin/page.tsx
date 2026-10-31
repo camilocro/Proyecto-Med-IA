@@ -15,6 +15,8 @@ import StatsCard, { Tendencia } from "@/components/admin/StatsCard";
 import { GraficoBarras, GraficoDonut } from "@/components/admin/Graficos";
 import Sidebar, { SeccionAdmin } from "@/components/admin/Sidebar";
 import UsuariosTable from "@/components/admin/UsuariosTable";
+import MedicosPanel from "@/components/admin/MedicosPanel";
+import EspecialidadesPanel from "@/components/admin/EspecialidadesPanel";
 import {
   ClipboardList,
   AlertTriangle,
@@ -137,6 +139,8 @@ type Tab = SeccionAdmin;
 const TABS: { id: Tab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "usuarios", label: "Usuarios" },
+  { id: "medicos", label: "Médicos" },
+  { id: "especialidades", label: "Especialidades" },
 ];
 
 // ── Estado de la página ───────────────────────────────────────────────────────
@@ -291,12 +295,12 @@ export default function AdminPage() {
 
         {/* ── Tabs ── */}
         <div className="bg-white border-b border-gray-100 px-4 sm:px-8">
-          <div className="flex gap-0">
+          <div className="flex gap-0 overflow-x-auto">
             {TABS.map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => setTabActiva(id)}
-                className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   tabActiva === id
                     ? "border-primary text-primary"
                     : "border-transparent text-gray-500 hover:text-gray-700"
@@ -548,6 +552,13 @@ export default function AdminPage() {
               )}
             </section>
           )}
+
+          {/* ══ TAB MÉDICOS (HU-018 a HU-021) ══════════════════════════════ */}
+          {tabActiva === "medicos" && <MedicosPanel onDatosCambiados={cargarDatos} />}
+
+          {/* ══ TAB ESPECIALIDADES (HU-022, HU-023, HU-062) ════════════════ */}
+          {tabActiva === "especialidades" && <EspecialidadesPanel onDatosCambiados={cargarDatos} />}
+
         </main>
       </div>
     </div>

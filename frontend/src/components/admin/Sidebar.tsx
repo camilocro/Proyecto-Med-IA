@@ -17,7 +17,7 @@ import {
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 /** Secciones del panel que ya están implementadas como pestañas de /admin */
-export type SeccionAdmin = 'dashboard' | 'usuarios'
+export type SeccionAdmin = 'dashboard' | 'usuarios' | 'medicos' | 'especialidades'
 
 interface EnlaceSidebar {
   label:    string
@@ -30,8 +30,8 @@ interface EnlaceSidebar {
 const ENLACES: EnlaceSidebar[] = [
   { label: 'Dashboard',      Icono: LayoutDashboard, seccion: 'dashboard' },
   { label: 'Usuarios',       Icono: Users,           seccion: 'usuarios'  },
-  { label: 'Médicos',        Icono: Stethoscope     },
-  { label: 'Especialidades', Icono: BookOpen        },
+  { label: 'Médicos',        Icono: Stethoscope,     seccion: 'medicos'        },
+  { label: 'Especialidades', Icono: BookOpen,        seccion: 'especialidades' },
   { label: 'Consultas',      Icono: ClipboardList   },
   { label: 'Configuración',  Icono: Settings        },
 ]
