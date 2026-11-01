@@ -114,7 +114,8 @@ export function GraficoDonut({ datos }: { datos: EspecialidadEstadistica[] }) {
       0,
       (item.porcentaje / 100) * circunferencia - separacion,
     );
-    const offset = circunferencia - (acumulado / 100) * circunferencia;
+    // Offset negativo: cada segmento empieza donde terminó el anterior
+    const offset = -(acumulado / 100) * circunferencia;
     acumulado += item.porcentaje;
     return { ...item, largo, offset };
   });
