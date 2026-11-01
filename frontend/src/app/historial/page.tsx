@@ -59,6 +59,13 @@ function formatearFecha(fechaISO: string): string {
   });
 }
 
+/** "Sin terminar" agrupa las que esperan respuestas y las que quedaron en proceso */
+function coincideEstado(estado: EstadoConsulta, filtro: EstadoConsulta): boolean {
+  if (filtro === "esperando_respuestas")
+    return estado === "esperando_respuestas" || estado === "en_proceso";
+  return estado === filtro;
+}
+
 /** Filtra en el navegador (HU-063): sin endpoint nuevo. Las fechas se toman en hora local. */
 function aplicarFiltros(
   consultas: Consulta[],
@@ -77,7 +84,8 @@ function aplicarFiltros(
       return false;
     if (filtros.urgencia && consulta.nivel_urgencia !== filtros.urgencia)
       return false;
-    if (filtros.estado && consulta.estado !== filtros.estado) return false;
+    if (filtros.estado && !coincideEstado(consulta.estado, filtros.estado))
+      return false;
 
     const fecha = new Date(consulta.fecha_consulta);
     if (desde && fecha < desde) return false;
