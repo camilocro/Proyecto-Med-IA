@@ -52,6 +52,14 @@ export interface EstadisticasAdmin {
   };
 }
 
+/** Lo que devuelve GET /admin/configuracion */
+export interface ConfiguracionSistema {
+  id_config: number;
+  clave: string;
+  valor: string;
+  updated_at: string;
+}
+
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
 export const adminService = {
@@ -84,6 +92,23 @@ export const adminService = {
       .patch<
         ApiResponse<UsuarioAdmin>
       >(`/admin/usuarios/${id}/estado`, { activo })
+      .then((res) => res.data.data);
+  },
+
+  getConfiguracion(): Promise<ConfiguracionSistema[]> {
+    return apiClient
+      .get<ApiResponse<ConfiguracionSistema[]>>("/admin/configuracion")
+      .then((res) => res.data.data);
+  },
+
+  actualizarConfiguracion(
+    clave: string,
+    valor: string,
+  ): Promise<ConfiguracionSistema> {
+    return apiClient
+      .patch<
+        ApiResponse<ConfiguracionSistema>
+      >("/admin/configuracion", { clave, valor })
       .then((res) => res.data.data);
   },
 };

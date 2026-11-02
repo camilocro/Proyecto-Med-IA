@@ -26,6 +26,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import ConfiguracionPanel from "@/components/admin/ConfiguracionPanel";
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "usuarios", label: "Usuarios" },
   { id: "medicos", label: "Médicos" },
   { id: "especialidades", label: "Especialidades" },
+  { id: "configuracion", label: "Configuración" },
 ];
 
 // ── Estado de la página ───────────────────────────────────────────────────────
@@ -554,11 +556,17 @@ export default function AdminPage() {
           )}
 
           {/* ══ TAB MÉDICOS (HU-018 a HU-021) ══════════════════════════════ */}
-          {tabActiva === "medicos" && <MedicosPanel onDatosCambiados={cargarDatos} />}
+          {tabActiva === "medicos" && (
+            <MedicosPanel onDatosCambiados={cargarDatos} />
+          )}
 
           {/* ══ TAB ESPECIALIDADES (HU-022, HU-023, HU-062) ════════════════ */}
-          {tabActiva === "especialidades" && <EspecialidadesPanel onDatosCambiados={cargarDatos} />}
+          {tabActiva === "especialidades" && (
+            <EspecialidadesPanel onDatosCambiados={cargarDatos} />
+          )}
 
+          {/* ══ TAB CONFIGURACIÓN (HU-067) ═════════════════════════════════ */}
+          {tabActiva === "configuracion" && <ConfiguracionPanel />}
         </main>
       </div>
     </div>
