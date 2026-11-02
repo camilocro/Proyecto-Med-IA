@@ -5,6 +5,7 @@ import {
   CONFIG_KEY_DAILY_LIMIT,
   MAX_CONSULTAS_RECIENTES_ADMIN,
   DIAS_GRAFICO_CONSULTAS,
+  MAX_LIMITE_DIARIO,
 } from "../../constants";
 
 // Campos seguros del usuario: nunca se devuelve el password_hash
@@ -82,12 +83,21 @@ export async function getConfiguracion() {
   return prisma.configuracionSistema.findMany();
 }
 
+// Solo estas claves se pueden modificar desde el panel
+const CLAVES_CONFIGURABLES = [CONFIG_KEY_DAILY_LIMIT];
+
 export async function setConfiguracion(clave: string, valor: string) {
-  // HU-067 CA-2: el límite diario debe ser un entero mayor a 0
+  if (!CLAVES_CONFIGURABLES.includes(clave)) {
+    throw badRequest(`La clave "${clave}" no se puede configurar`);
+  }
+
+  // HU-067 CA-2: el límite diario debe ser un entero entre 1 y el máximo permitido
   if (clave === CONFIG_KEY_DAILY_LIMIT) {
     const limite = Number(valor);
-    if (!Number.isInteger(limite) || limite < 1) {
-      throw badRequest("El límite diario debe ser un número entero mayor a 0");
+    if (!Number.isInteger(limite) || limite < 1 || limite > MAX_LIMITE_DIARIO) {
+      throw badRequest(
+        `El límite diario debe ser un número entero entre 1 y ${MAX_LIMITE_DIARIO}`,
+      );
     }
   }
 
