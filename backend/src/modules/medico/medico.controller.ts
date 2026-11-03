@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import {
   getMedicosPorEspecialidad,
+  getDetalleMedico,
   getPerfilMedico,
   actualizarPerfilMedico,
   cambiarDisponibilidad,
@@ -11,6 +12,7 @@ import {
   cambiarEstadoMedico,
   DatosNuevoMedico,
   CambiosMedico,
+  CambiosPerfilMedico,
 } from './medico.service'
 import { ok, AuthenticatedRequest } from '../../shared/types'
 import { badRequest } from '../../errors/AppError'
@@ -95,11 +97,29 @@ function validarCambiosMedico(body: unknown): CambiosMedico {
   return cambios
 }
 
+/** HU-041: el médico solo puede cambiar su descripción y su teléfono (la especialidad no) */
+function validarCambiosPerfil(body: unknown): CambiosPerfilMedico {
+  const datos = (body ?? {}) as Record<string, unknown>
+  const cambios: CambiosPerfilMedico = {
+    descripcion_profesional: siViene(datos, 'descripcion_profesional', (v) => validarTexto(v, 'descripción profesional', MIN_LONGITUD_DESCRIPCION_MEDICO, MAX_LONGITUD_DESCRIPCION_MEDICO)),
+    telefono_contacto:       siViene(datos, 'telefono_contacto', validarTelefono),
+  }
+  if (Object.values(cambios).every((v) => v === undefined)) {
+    throw badRequest('Envía la descripción profesional o el teléfono para actualizar')
+  }
+  return cambios
+}
+
 // ─── Handlers públicos y del propio médico ────────────────────────────────────
 
 export async function porEspecialidad(req: Request, res: Response) {
   const medicos = await getMedicosPorEspecialidad(parsearId(req.params.idEspecialidad, 'ID de especialidad'))
   res.json(ok(medicos))
+}
+
+export async function detalle(req: Request, res: Response) {
+  const medico = await getDetalleMedico(parsearId(req.params.id, 'ID de médico'))
+  res.json(ok(medico))
 }
 
 export async function miPerfil(req: Request, res: Response) {
@@ -110,13 +130,16 @@ export async function miPerfil(req: Request, res: Response) {
 
 export async function actualizarPerfil(req: Request, res: Response) {
   const { id_usuario } = (req as AuthenticatedRequest).usuario
-  const medico         = await actualizarPerfilMedico(id_usuario, req.body)
+  const medico         = await actualizarPerfilMedico(id_usuario, validarCambiosPerfil(req.body))
   res.json(ok(medico))
 }
 
 export async function toggleDisponibilidad(req: Request, res: Response) {
   const { id_usuario } = (req as AuthenticatedRequest).usuario
-  const medico         = await cambiarDisponibilidad(id_usuario, req.body.disponible)
+  const disponible     = req.body?.disponible
+  if (typeof disponible !== 'boolean') throw badRequest('El campo "disponible" debe ser true o false')
+
+  const medico = await cambiarDisponibilidad(id_usuario, disponible)
   res.json(ok(medico))
 }
 

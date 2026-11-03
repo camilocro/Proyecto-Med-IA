@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   porEspecialidad,
+  detalle,
   miPerfil,
   actualizarPerfil,
   toggleDisponibilidad,
@@ -25,6 +26,8 @@ router.patch('/disponibilidad',              requireAuth, soloMedico, toggleDisp
 router.get('/centros',                       requireAuth, soloAdmin,  centros)
 router.get('/',                              requireAuth, soloAdmin,  listar)
 router.post('/',                             requireAuth, soloAdmin,  crear)
+// Público: el paciente (también anónimo) ve el detalle del médico sugerido (HU-059)
+router.get('/:id',                           detalle)
 router.patch('/:id',                         requireAuth, soloAdmin,  actualizar)
 router.patch('/:id/estado',                  requireAuth, soloAdmin,  cambiarEstado)
 

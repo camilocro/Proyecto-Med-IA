@@ -86,11 +86,27 @@ async function validarCorreoLibre(correo: string, idUsuarioActual?: number) {
 
 // ─── Consultas públicas y del propio médico ───────────────────────────────────
 
+export interface CambiosPerfilMedico {
+  descripcion_profesional?: string
+  telefono_contacto?:       string
+}
+
 export async function getMedicosPorEspecialidad(idEspecialidad: number) {
   return prisma.medico.findMany({
-    where:   { id_especialidad: idEspecialidad, disponible: true },
+    // Una cuenta desactivada no debe ofrecerse aunque haya quedado marcada como disponible
+    where:   { id_especialidad: idEspecialidad, disponible: true, usuario: { activo: true } },
     include: INCLUDE_MEDICO,
   })
+}
+
+/** HU-059: detalle público de un médico. Solo médicos con la cuenta activa. */
+export async function getDetalleMedico(idMedico: number) {
+  const medico = await prisma.medico.findFirst({
+    where:   { id_medico: idMedico, usuario: { activo: true } },
+    include: INCLUDE_MEDICO,
+  })
+  if (!medico) throw notFound('Médico')
+  return medico
 }
 
 export async function getPerfilMedico(idUsuario: number) {
@@ -102,20 +118,23 @@ export async function getPerfilMedico(idUsuario: number) {
   return medico
 }
 
-export async function actualizarPerfilMedico(
-  idUsuario: number,
-  data: { descripcion_profesional?: string; telefono_contacto?: string; foto_url?: string },
-) {
+/** HU-041: el médico solo edita su descripción y su teléfono; la especialidad la asigna el administrador. */
+export async function actualizarPerfilMedico(idUsuario: number, cambios: CambiosPerfilMedico) {
+  await getPerfilMedico(idUsuario) // 404 claro si la cuenta no tiene perfil de médico
   return prisma.medico.update({
-    where: { id_usuario: idUsuario },
-    data,
+    where:   { id_usuario: idUsuario },
+    data:    cambios,
+    include: INCLUDE_MEDICO,
   })
 }
 
+/** HU-042: un médico no disponible deja de aparecer en las sugerencias del triage (RN-005). */
 export async function cambiarDisponibilidad(idUsuario: number, disponible: boolean) {
+  await getPerfilMedico(idUsuario)
   return prisma.medico.update({
-    where: { id_usuario: idUsuario },
-    data:  { disponible },
+    where:   { id_usuario: idUsuario },
+    data:    { disponible },
+    include: INCLUDE_MEDICO,
   })
 }
 
