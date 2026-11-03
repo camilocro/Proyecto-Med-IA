@@ -40,6 +40,9 @@ export const MIN_LONGITUD_PASSWORD = 8;
 
 export const DIAS_GRAFICO_CONSULTAS = 7;
 
+// Consultas completadas anteriores que se envían a la IA como contexto (HU-014, HU-056)
+export const MAX_CONSULTAS_HISTORIAL_IA = 3;
+
 // ─── Médicos y especialidades ─────────────────────────────────────────────────
 export const MIN_LONGITUD_DESCRIPCION_MEDICO = 10;
 export const MAX_LONGITUD_DESCRIPCION_MEDICO = 500;

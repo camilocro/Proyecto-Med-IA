@@ -12,12 +12,14 @@ import {
   ESPECIALIDAD_POR_DEFECTO,
   URGENCIA_CASO_COMPLEJO,
   MOTIVO_CASO_COMPLEJO,
+  MAX_CONSULTAS_HISTORIAL_IA,
 } from "../../constants";
 import { getTodayRange } from "../../shared/fechas";
 import {
   analizarSintomas,
   ErrorIA,
   EntradaAnalisis,
+  ConsultaPrevia,
   ResultadoAnalisisIA,
   RondaRespondida,
 } from "./ia.service";
@@ -267,10 +269,16 @@ async function procesarAnalisis(idConsulta: number): Promise<void> {
   });
   if (!consulta) throw notFound("Consulta");
 
-  const especialidades = await prisma.especialidad.findMany({
-    where: { activo: true },
-    select: { id_especialidad: true, nombre: true },
-  });
+  const [especialidades, historial] = await Promise.all([
+    prisma.especialidad.findMany({
+      where: { activo: true },
+      select: { id_especialidad: true, nombre: true },
+    }),
+    // HU-014 / HU-056: los anónimos no tienen historial
+    consulta.id_paciente
+      ? obtenerHistorialParaIA(consulta.id_paciente, idConsulta)
+      : Promise.resolve([]),
+  ]);
 
   const rondas: RondaRespondida[] = consulta.rondas.map((r) => ({
     numero: r.numero_ronda,
@@ -284,6 +292,7 @@ async function procesarAnalisis(idConsulta: number): Promise<void> {
     descripcion: consulta.descripcion_sintomas,
     rondas,
     especialidades: especialidades.map((e) => e.nombre),
+    historial,
   });
 
   if (resultado.suficienteInformacion) {
@@ -313,6 +322,40 @@ async function procesarAnalisis(idConsulta: number): Promise<void> {
     consulta.rondas.length + 1,
     resultado.preguntasSeguimiento,
   );
+}
+
+/** 'YYYY-MM-DD' en hora local del servidor (la misma que usa el límite diario) */
+function fechaLocal(fecha: Date): string {
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
+/** Últimas consultas completadas del paciente, resumidas para la IA (sin la consulta actual). */
+async function obtenerHistorialParaIA(
+  idPaciente: number,
+  idConsultaActual: number,
+): Promise<ConsultaPrevia[]> {
+  const anteriores = await prisma.consulta.findMany({
+    where: {
+      id_paciente: idPaciente,
+      estado: "completada",
+      id_consulta: { not: idConsultaActual },
+    },
+    orderBy: { fecha_consulta: "desc" },
+    take: MAX_CONSULTAS_HISTORIAL_IA,
+    select: {
+      fecha_consulta: true,
+      nivel_urgencia: true,
+      especialidad_sugerida: { select: { nombre: true } },
+    },
+  });
+
+  return anteriores.map((c) => ({
+    fecha: fechaLocal(c.fecha_consulta),
+    especialidad: c.especialidad_sugerida?.nombre ?? "sin especialidad",
+    nivelUrgencia: c.nivel_urgencia ?? "no indicada",
+  }));
 }
 
 async function analizarConManejoDeErrores(
