@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
+import prisma from '../config/prisma'
 import { unauthorized, forbidden } from '../errors/AppError'
 import { AuthenticatedRequest } from '../shared/types'
 
@@ -27,16 +28,36 @@ function verifyToken(token: string): JwtPayload | null {
   }
 }
 
+const MENSAJE_CUENTA_DESACTIVADA = 'Tu cuenta fue desactivada. Comunícate con el administrador.'
+
 /**
- * Requiere token JWT válido.
+ * HU-007 CA-3 / HU-020: un JWT sigue siendo válido hasta que vence, así que además
+ * se confirma en la base de datos que la cuenta continúa activa.
+ */
+async function cuentaActiva(idUsuario: number): Promise<boolean> {
+  const usuario = await prisma.usuario.findUnique({
+    where:  { id_usuario: idUsuario },
+    select: { activo: true },
+  })
+  return usuario?.activo === true
+}
+
+/**
+ * Requiere token JWT válido y una cuenta activa.
  * Adjunta req.usuario con id, correo y rol.
  */
-export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const token   = extractToken(req.headers.authorization)
   if (!token) return next(unauthorized())
 
   const payload = verifyToken(token)
   if (!payload) return next(unauthorized('Token inválido o expirado'))
+
+  try {
+    if (!(await cuentaActiva(payload.id_usuario))) return next(unauthorized(MENSAJE_CUENTA_DESACTIVADA))
+  } catch (error) {
+    return next(error)
+  }
 
   ;(req as AuthenticatedRequest).usuario = payload
   next()
@@ -45,12 +66,20 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
 /**
  * Igual que requireAuth pero no falla si no hay token.
  * Útil para rutas que funcionan tanto para usuarios registrados como anónimos.
+ * Un token de una cuenta desactivada sí se rechaza: no debe seguir operando como registrado.
  */
-export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   const token = extractToken(req.headers.authorization)
   if (token) {
     const payload = verifyToken(token)
-    if (payload) (req as AuthenticatedRequest).usuario = payload
+    if (payload) {
+      try {
+        if (!(await cuentaActiva(payload.id_usuario))) return next(unauthorized(MENSAJE_CUENTA_DESACTIVADA))
+      } catch (error) {
+        return next(error)
+      }
+      ;(req as AuthenticatedRequest).usuario = payload
+    }
   }
   next()
 }

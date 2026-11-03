@@ -1,3 +1,5 @@
+import { RolUsuario } from '@/types'
+
 // Flujo de autenticación definido para Med-IA (HU-001 CA-5):
 // al registrarse, el usuario NO queda logueado automáticamente; se lo redirige al
 // inicio de sesión, donde solo se muestra la opción de iniciar sesión.
@@ -32,4 +34,14 @@ export function consumirCorreoRegistrado(): string {
   } catch {
     return ''
   }
+}
+
+/** HU-039: a dónde va cada rol después de iniciar sesión. */
+export function rutaInicioPorRol(rol: RolUsuario): string {
+  return rol === 'medico' ? '/medico' : '/'
+}
+
+/** El triage solo es para pacientes y anónimos: el backend lo rechaza a médicos y administradores. */
+export function puedeHacerTriage(rol: RolUsuario | undefined): boolean {
+  return rol === undefined || rol === 'paciente'
 }

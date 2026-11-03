@@ -6,6 +6,7 @@ import { useAuth }      from '@/hooks/useAuth'
 import { authService }  from '@/services/auth.service'
 import {
   RUTA_LOGIN_TRAS_REGISTRO,
+  rutaInicioPorRol,
   vieneDeRegistroExitoso,
   recordarCorreoRegistrado,
   consumirCorreoRegistrado,
@@ -163,7 +164,7 @@ function InputField({
 
 export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabActiva }) {
   const router              = useRouter()
-  const { guardarSesion, estaAutenticado, cargando: cargandoSesion } = useAuth()
+  const { usuario, guardarSesion, cargando: cargandoSesion } = useAuth()
   const [tab, setTab]       = useState<TabActiva>(tabInicial)
   const [cargando, setCargando] = useState(false)
   // Error del servidor: permanece visible hasta que el usuario corrige un campo,
@@ -201,10 +202,10 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
     if (correo) setCorreoLogin(correo)
   }, [])
 
-  // Un usuario con sesión activa no necesita ver login ni registro
+  // Un usuario con sesión activa no necesita ver login ni registro: va a su inicio según el rol
   useEffect(() => {
-    if (!cargandoSesion && estaAutenticado) router.replace('/')
-  }, [cargandoSesion, estaAutenticado, router])
+    if (!cargandoSesion && usuario) router.replace(rutaInicioPorRol(usuario.rol))
+  }, [cargandoSesion, usuario, router])
 
   // ── Handlers de cambio: limpian solo el error del campo modificado ──────────
 
@@ -243,7 +244,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
     if (!resultado) return
     guardarSesion(resultado.token, resultado.usuario)
-    router.push('/')
+    router.push(rutaInicioPorRol(resultado.usuario.rol)) // HU-039: el médico entra a su panel
   }
 
   async function handleRegistro(e: React.FormEvent) {

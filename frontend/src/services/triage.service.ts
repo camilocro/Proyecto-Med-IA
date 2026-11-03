@@ -9,6 +9,12 @@ interface RespuestaRonda {
   id_pr: number;
   respuesta: string;
 }
+export interface ContadorConsultas {
+  limite: number;
+  usadas: number;
+  restantes: number;
+  reinicio: string; // ISO
+}
 
 export const triageService = {
   async iniciarConsulta(descripcionSintomas: string): Promise<Consulta> {
@@ -47,6 +53,13 @@ export const triageService = {
   async obtenerHistorial(): Promise<Consulta[]> {
     const { data } = await apiClient.get<{ data: Consulta[] }>(
       "/consultas/historial",
+    );
+    return data.data;
+  },
+
+  async obtenerRestantes(): Promise<ContadorConsultas> {
+    const { data } = await apiClient.get<{ data: ContadorConsultas }>(
+      "/consultas/restantes",
     );
     return data.data;
   },

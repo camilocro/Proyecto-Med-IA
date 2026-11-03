@@ -37,3 +37,19 @@ export const MAX_CONSULTAS_RECIENTES_ADMIN = 20;
 export const MIN_LONGITUD_NOMBRE = 2;
 export const MAX_LONGITUD_NOMBRE = 100;
 export const MIN_LONGITUD_PASSWORD = 8;
+
+export const DIAS_GRAFICO_CONSULTAS = 7;
+
+// Consultas completadas anteriores que se envían a la IA como contexto (HU-014, HU-056)
+export const MAX_CONSULTAS_HISTORIAL_IA = 3;
+
+// ─── Médicos y especialidades ─────────────────────────────────────────────────
+export const MIN_LONGITUD_DESCRIPCION_MEDICO = 10;
+export const MAX_LONGITUD_DESCRIPCION_MEDICO = 500;
+export const MIN_LONGITUD_TELEFONO = 7;
+export const MAX_LONGITUD_TELEFONO = 15;
+export const LONGITUD_PASSWORD_TEMPORAL = 10;
+export const MAX_LONGITUD_NOMBRE_ESPECIALIDAD = 60;
+export const MIN_LONGITUD_DESCRIPCION_ESPECIALIDAD = 10;
+export const MAX_LONGITUD_DESCRIPCION_ESPECIALIDAD = 300;
+export const MAX_LIMITE_DIARIO = 100;
