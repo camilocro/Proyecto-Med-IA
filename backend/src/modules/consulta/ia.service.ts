@@ -26,10 +26,18 @@ export interface RondaRespondida {
   preguntas: PreguntaRespondida[];
 }
 
+/** Resumen de una consulta anterior: sin los síntomas, solo lo necesario como contexto */
+export interface ConsultaPrevia {
+  fecha: string; // 'YYYY-MM-DD'
+  especialidad: string;
+  nivelUrgencia: string;
+}
+
 export interface EntradaAnalisis {
   descripcion: string;
   rondas: RondaRespondida[]; // conversación acumulada (la IA no tiene memoria)
   especialidades: string[]; // catálogo activo de la BD
+  historial?: ConsultaPrevia[]; // solo pacientes registrados (HU-014, HU-056)
 }
 
 // ─── Esquema de la respuesta de la IA (se valida en ejecución) ───────────────
@@ -144,6 +152,11 @@ ESPECIALIDAD:
 - En una emergencia, elige igualmente la especialidad más relacionada con los síntomas (por ejemplo, dolor de pecho → Cardiología); la urgencia ya indica que debe ir a emergencias.
 - Si ninguna encaja claramente, usa "${ESPECIALIDAD_POR_DEFECTO}".
 
+HISTORIAL DEL PACIENTE (si se incluye):
+- Son sus consultas anteriores en Med-IA: fecha, especialidad sugerida y urgencia. Úsalo solo como contexto.
+- Puede ayudarte a notar síntomas que se repiten, pero la especialidad y la urgencia se deciden por los síntomas ACTUALES.
+- No asumas que el problema actual es el mismo de antes ni preguntes por consultas anteriores.
+
 CASO COMPLEJO:
 - Si los síntomas son contradictorios y no pueden aclararse con preguntas, responde suficienteInformacion false y casoComplejo true.
 
@@ -168,7 +181,19 @@ Cada síntoma: {"descripcion": "...", "zona_cuerpo": "...", "duracion_estimada":
 }
 
 function construirMensajeUsuario(entrada: EntradaAnalisis): string {
-  let texto = `Descripción inicial del paciente:\n"""${entrada.descripcion}"""`;
+  let texto = "";
+
+  if (entrada.historial?.length) {
+    const lineas = entrada.historial
+      .map(
+        (c) =>
+          `- ${c.fecha}: ${c.especialidad}, urgencia ${c.nivelUrgencia}`,
+      )
+      .join("\n");
+    texto += `Consultas anteriores del paciente (de la más reciente a la más antigua):\n${lineas}\n\n`;
+  }
+
+  texto += `Descripción inicial del paciente:\n"""${entrada.descripcion}"""`;
 
   for (const ronda of entrada.rondas) {
     const pares = ronda.preguntas

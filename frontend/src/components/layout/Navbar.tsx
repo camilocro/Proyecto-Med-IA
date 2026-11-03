@@ -6,17 +6,17 @@ import { useRouter }   from 'next/navigation'
 import { usePathname } from 'next/navigation'
 import { useAuth }     from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
-import { vieneDeRegistroExitoso } from '@/lib/flujoAuth'
+import { vieneDeRegistroExitoso, puedeHacerTriage } from '@/lib/flujoAuth'
 import { Shield, LogOut, UserCircle, Menu, X } from 'lucide-react'
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
-const ENLACES_BASE = [
-  { href: '/',          label: 'Inicio'    },
+const ENLACE_INICIO = { href: '/',       label: 'Inicio'    }
+const ENLACES_TRIAGE = [
   { href: '/consulta',  label: 'Consulta'  },
   { href: '/historial', label: 'Historial' },
 ]
-
+const ENLACE_MEDICO = { href: '/medico', label: 'Mi Panel'  }
 const ENLACE_ADMIN  = { href: '/admin',  label: 'Admin'     }
 const ENLACE_PERFIL = { href: '/perfil', label: 'Mi Perfil' }
 
@@ -40,7 +40,7 @@ function InicialAvatar({ nombre }: { nombre: string }) {
 // ── Componente principal ────────────────────────────────────────────────────────
 
 export default function Navbar() {
-  const { usuario, esAdmin, estaAutenticado, cerrarSesion } = useAuth()
+  const { usuario, esAdmin, esMedico, estaAutenticado, cerrarSesion } = useAuth()
   const router   = useRouter()
   const pathname = usePathname()
 
@@ -56,9 +56,11 @@ export default function Navbar() {
     setMenuAbierto(false)
   }, [pathname])
 
-  // Construye los enlaces según el rol
+  // Construye los enlaces según el rol (HU-039): Consulta e Historial solo para pacientes y anónimos
   const enlaces = [
-    ...ENLACES_BASE,
+    ENLACE_INICIO,
+    ...(puedeHacerTriage(usuario?.rol) ? ENLACES_TRIAGE : []),
+    ...(esMedico        ? [ENLACE_MEDICO] : []),
     ...(estaAutenticado ? [ENLACE_PERFIL] : []),
     ...(esAdmin         ? [ENLACE_ADMIN]  : []),
   ]
