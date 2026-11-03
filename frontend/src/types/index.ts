@@ -25,6 +25,7 @@ export interface CentroSalud {
   nombre:    string
   direccion: string
   zona:      string
+  telefono?: string
 }
 
 export interface Medico {
