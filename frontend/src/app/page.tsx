@@ -26,8 +26,14 @@ const CARACTERISTICAS = [
 
 export default function LandingPage() {
   // "Registrarse" solo se ofrece a quien no tiene sesión iniciada
-  const { estaAutenticado, cargando } = useAuth()
+  const { usuario, estaAutenticado, cargando } = useAuth()
   const mostrarRegistro = !cargando && !estaAutenticado
+
+  // Médicos y administradores no hacen triage: su botón principal lleva a su panel
+  const accionPrincipal =
+    usuario?.rol === 'medico'        ? { href: '/medico', texto: 'Ir a Mi Panel' }
+    : usuario?.rol === 'administrador' ? { href: '/admin',  texto: 'Ir al Panel Administrativo' }
+    : { href: '/consulta', texto: 'Iniciar Consulta' }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -46,8 +52,8 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/consulta" className="btn-primary w-full sm:w-auto text-center px-8 py-3.5">
-              Iniciar Consulta
+            <Link href={accionPrincipal.href} className="btn-primary w-full sm:w-auto text-center px-8 py-3.5">
+              {accionPrincipal.texto}
             </Link>
             {mostrarRegistro && (
               <Link href="/registro" className="btn-outline w-full sm:w-auto text-center px-8 py-3.5">
