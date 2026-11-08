@@ -1,5 +1,6 @@
 import { randomInt } from 'crypto'
 import bcrypt from 'bcryptjs'
+import { Prisma } from '@prisma/client'
 import prisma from '../../config/prisma'
 import { badRequest, conflict, notFound } from '../../errors/AppError'
 import { SALT_ROUNDS, LONGITUD_PASSWORD_TEMPORAL } from '../../constants'
@@ -11,12 +12,21 @@ const INCLUDE_MEDICO = {
   centro_salud: true,
 } as const
 
-// Vista del administrador: incluye correo y estado de la cuenta (nunca el password_hash)
-const INCLUDE_MEDICO_ADMIN = {
+// Vista del administrador: incluye correo y estado de la cuenta (nunca el password_hash).
+// La foto (HU-060) no se envía: el panel no la muestra y cada una pesa hasta 64 KB.
+const SELECT_MEDICO_ADMIN = {
+  id_medico:               true,
+  id_usuario:              true,
+  id_especialidad:         true,
+  id_centro_salud:         true,
+  descripcion_profesional: true,
+  telefono_contacto:       true,
+  disponible:              true,
+  created_at:              true,
   usuario:      { select: { id_usuario: true, nombre: true, correo: true, activo: true } },
   especialidad: true,
   centro_salud: true,
-} as const
+} satisfies Prisma.MedicoSelect
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -57,8 +67,8 @@ function generarPasswordTemporal(): string {
 
 async function obtenerMedicoAdmin(idMedico: number) {
   const medico = await prisma.medico.findUnique({
-    where:   { id_medico: idMedico },
-    include: INCLUDE_MEDICO_ADMIN,
+    where:  { id_medico: idMedico },
+    select: SELECT_MEDICO_ADMIN,
   })
   if (!medico) throw notFound('Médico')
   return medico
@@ -179,7 +189,7 @@ export async function getEstadisticasMedico(idUsuario: number, periodo: RangoFec
 
 export async function listarMedicos() {
   return prisma.medico.findMany({
-    include: INCLUDE_MEDICO_ADMIN,
+    select:  SELECT_MEDICO_ADMIN,
     orderBy: { usuario: { nombre: 'asc' } },
   })
 }

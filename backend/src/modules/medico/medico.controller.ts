@@ -173,8 +173,6 @@ export async function toggleDisponibilidad(req: Request, res: Response) {
   res.json(ok(medico))
 }
 
-// ─── Handlers del administrador ───────────────────────────────────────────────
-
 /** GET /medicos/estadisticas?desde&hasta — por defecto, el último mes (HU-061) */
 export async function estadisticas(req: Request, res: Response) {
   const { id_usuario } = (req as AuthenticatedRequest).usuario
@@ -198,6 +196,8 @@ export async function eliminarFoto(req: Request, res: Response) {
   const medico         = await actualizarFotoMedico(id_usuario, null)
   res.json(ok(medico))
 }
+
+// ─── Handlers del administrador ───────────────────────────────────────────────
 
 export async function listar(_req: Request, res: Response) {
   const medicos = await listarMedicos()

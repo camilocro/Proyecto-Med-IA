@@ -16,7 +16,7 @@ import {
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-/** Secciones del panel que ya están implementadas como pestañas de /admin */
+/** Secciones del panel (pestañas de /admin) */
 export type SeccionAdmin =
   | "dashboard"
   | "usuarios"
@@ -28,7 +28,7 @@ export type SeccionAdmin =
 interface EnlaceSidebar {
   label: string;
   Icono: LucideIcon;
-  seccion?: SeccionAdmin; // sin sección = módulo aún no implementado
+  seccion: SeccionAdmin;
 }
 
 // ── Constantes (fuera del componente para evitar recreación) ──────────────────
@@ -86,25 +86,6 @@ export default function Sidebar({
       {/* Navegación del panel */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {ENLACES.map(({ label, Icono, seccion }) => {
-          if (!seccion) {
-            // Módulos planificados en el backlog pero aún no disponibles: no navegan a una ruta inexistente
-            return (
-              <span
-                key={label}
-                aria-disabled="true"
-                title="Disponible en un próximo sprint"
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium
-                           text-white/40 cursor-not-allowed select-none"
-              >
-                <Icono className="w-5 h-5 flex-shrink-0" />
-                <span className="flex-1">{label}</span>
-                <span className="text-[10px] uppercase tracking-wide bg-white/10 px-1.5 py-0.5 rounded">
-                  Pronto
-                </span>
-              </span>
-            );
-          }
-
           const esActivo = seccionActiva === seccion;
           return (
             <button
