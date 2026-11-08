@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import prisma from '../../config/prisma'
 import { badRequest, conflict, notFound } from '../../errors/AppError'
 import { SALT_ROUNDS, LONGITUD_PASSWORD_TEMPORAL } from '../../constants'
+import { getTodayRange, RangoFechas } from '../../shared/fechas'
 
 const INCLUDE_MEDICO = {
   usuario:      { select: { nombre: true } },
@@ -136,6 +137,42 @@ export async function cambiarDisponibilidad(idUsuario: number, disponible: boole
     data:    { disponible },
     include: INCLUDE_MEDICO,
   })
+}
+
+/** HU-060: guarda la foto ya recortada (data URL) o la quita con `null` */
+export async function actualizarFotoMedico(idUsuario: number, fotoUrl: string | null) {
+  await getPerfilMedico(idUsuario)
+  return prisma.medico.update({
+    where:   { id_usuario: idUsuario },
+    data:    { foto_url: fotoUrl },
+    include: INCLUDE_MEDICO,
+  })
+}
+
+/** HU-061: cuántas veces fue sugerido en el período, y el mes actual frente al anterior (CA-4) */
+export async function getEstadisticasMedico(idUsuario: number, periodo: RangoFechas) {
+  const medico = await prisma.medico.findUnique({
+    where:  { id_usuario: idUsuario },
+    select: { id_medico: true },
+  })
+  if (!medico) throw notFound('Perfil de médico')
+
+  const { start: hoy, end: manana } = getTodayRange()
+  const inicioMes         = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+  const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1) // enero → diciembre del año anterior
+
+  const contar = (fecha: RangoFechas) =>
+    prisma.medicoSugerido.count({
+      where: { id_medico: medico.id_medico, consulta: { fecha_consulta: fecha } },
+    })
+
+  const [total, mesActual, mesAnterior] = await Promise.all([
+    contar(periodo),
+    contar({ gte: inicioMes, lt: manana }),
+    contar({ gte: inicioMesAnterior, lt: inicioMes }),
+  ])
+
+  return { total, mesActual, mesAnterior }
 }
 
 // ─── Gestión por el administrador (HU-018 a HU-021) ───────────────────────────
