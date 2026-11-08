@@ -32,7 +32,7 @@ export interface Medico {
   id_medico:               number
   descripcion_profesional: string
   telefono_contacto:       string
-  foto_url?:               string
+  foto_url?:               string | null // data URL de la foto (HU-060)
   disponible:              boolean
   usuario?:                { nombre: string }
   especialidad?:           Especialidad

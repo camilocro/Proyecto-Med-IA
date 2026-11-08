@@ -16,6 +16,15 @@ export interface CambiosPerfilMedico {
   telefono_contacto?:       string
 }
 
+/** HU-061: lo que devuelve GET /medicos/estadisticas */
+export interface EstadisticasMedico {
+  total:       number         // veces sugerido en el período
+  desde:       string | null  // 'AAAA-MM-DD'
+  hasta:       string | null
+  mesActual:   number
+  mesAnterior: number
+}
+
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
 export const medicoPanelService = {
@@ -37,6 +46,27 @@ export const medicoPanelService = {
   cambiarDisponibilidad(disponible: boolean): Promise<PerfilMedico> {
     return apiClient
       .patch<ApiResponse<PerfilMedico>>('/medicos/disponibilidad', { disponible })
+      .then((res) => res.data.data)
+  },
+
+  /** HU-061: sin fechas, el backend usa el último mes */
+  obtenerEstadisticas(periodo: { desde?: string; hasta?: string } = {}): Promise<EstadisticasMedico> {
+    const params = Object.fromEntries(Object.entries(periodo).filter(([, valor]) => valor))
+    return apiClient
+      .get<ApiResponse<EstadisticasMedico>>('/medicos/estadisticas', { params })
+      .then((res) => res.data.data)
+  },
+
+  /** HU-060: la foto ya recortada, como data URL JPEG */
+  actualizarFoto(imagen: string): Promise<PerfilMedico> {
+    return apiClient
+      .patch<ApiResponse<PerfilMedico>>('/medicos/perfil/foto', { imagen })
+      .then((res) => res.data.data)
+  },
+
+  eliminarFoto(): Promise<PerfilMedico> {
+    return apiClient
+      .delete<ApiResponse<PerfilMedico>>('/medicos/perfil/foto')
       .then((res) => res.data.data)
   },
 
