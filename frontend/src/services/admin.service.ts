@@ -38,7 +38,7 @@ export interface FiltrosConsultasAdmin {
   desde?: string;
   hasta?: string;
   urgencia?: NivelUrgencia | "";
-  estado?: EstadoConsulta | "esperando_confirmacion" | "";
+  estado?: EstadoConsulta | "";
   pagina?: number;
   porPagina?: number;
 }

@@ -2,7 +2,8 @@
 
 export type RolUsuario     = 'paciente' | 'medico' | 'administrador'
 export type NivelUrgencia  = 'bajo' | 'medio' | 'alto' | 'emergencia'
-export type EstadoConsulta = 'en_proceso' | 'esperando_respuestas' | 'completada' | 'cancelada'
+export type EstadoConsulta =
+  | 'en_proceso' | 'esperando_respuestas' | 'esperando_confirmacion' | 'completada' | 'cancelada'
 
 // ─── Entidades ────────────────────────────────────────────────────────────────
 
