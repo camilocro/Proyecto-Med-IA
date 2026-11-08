@@ -7,6 +7,9 @@ import { useAuth }   from '@/hooks/useAuth'
 import { medicoPanelService, PerfilMedico, CambiosPerfilMedico } from '@/services/medicoPanel.service'
 import { mensajeDeError } from '@/lib/errores'
 import Navbar from '@/components/layout/Navbar'
+import AvatarMedico from '@/components/ui/AvatarMedico'
+import FotoPerfilMedico from '@/components/medico/FotoPerfilMedico'
+import EstadisticasMedico from '@/components/medico/EstadisticasMedico'
 import {
   Stethoscope,
   Building2,
@@ -282,10 +285,17 @@ export default function MedicoPage() {
           {/* ── Tarjeta del perfil (HU-040) ── */}
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             <div className="bg-primary px-5 sm:px-8 py-6 sm:py-8 flex items-center gap-4 sm:gap-5">
-              <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
-                              text-white text-2xl font-bold select-none flex-shrink-0">
-                {iniciales(perfil.usuario.nombre)}
-              </div>
+              <AvatarMedico
+                fotoUrl={perfil.foto_url}
+                nombre={perfil.usuario.nombre}
+                className="w-16 h-16 rounded-2xl border-2 border-white/30"
+                sinFoto={
+                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
+                                  text-white text-2xl font-bold select-none flex-shrink-0">
+                    {iniciales(perfil.usuario.nombre)}
+                  </div>
+                }
+              />
               <div className="min-w-0">
                 <h2 className="text-white text-xl font-bold break-words">{perfil.usuario.nombre}</h2>
                 <p className="text-white/70 text-sm break-words">{especialidad.nombre}</p>
@@ -331,6 +341,12 @@ export default function MedicoPage() {
             />
             {avisoDisponibilidad && <AvisoMensaje aviso={avisoDisponibilidad} />}
           </div>
+
+          {/* ── Mis derivaciones (HU-061) ── */}
+          <EstadisticasMedico />
+
+          {/* ── Foto de perfil (HU-060) ── */}
+          <FotoPerfilMedico perfil={perfil} onActualizado={setPerfil} />
 
           {/* ── Editar perfil (HU-041) ── */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-8">

@@ -10,12 +10,15 @@ import HistorialFiltros, {
   FiltrosHistorial,
   FILTROS_VACIOS,
 } from "@/components/historial/HistorialFiltros";
+import { descargarPDF, fechaParaArchivo, fechaHoraLegible } from "@/lib/exportar";
 import {
   Calendar,
   ChevronRight,
   ClipboardList,
   AlertCircle,
   SearchX,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -94,6 +97,54 @@ function aplicarFiltros(
   });
 }
 
+/** Filtros activos en texto, para el encabezado del PDF (HU-064 CA-3) */
+function describirFiltros(filtros: FiltrosHistorial): string[] {
+  const lineas: string[] = [];
+  if (filtros.desde || filtros.hasta) {
+    lineas.push(
+      `Período: ${filtros.desde ? `desde el ${filtros.desde}` : ""}${filtros.desde && filtros.hasta ? " " : ""}${filtros.hasta ? `hasta el ${filtros.hasta}` : ""}`,
+    );
+  }
+  if (filtros.especialidad) lineas.push(`Especialidad: ${filtros.especialidad}`);
+  if (filtros.urgencia)
+    lineas.push(`Urgencia: ${ETIQUETA_URGENCIA[filtros.urgencia].texto}`);
+  if (filtros.estado)
+    lineas.push(
+      `Estado: ${filtros.estado === "completada" ? "Completada" : (ETIQUETA_ESTADO[filtros.estado]?.texto ?? filtros.estado)}`,
+    );
+  return lineas;
+}
+
+/** HU-064: PDF con las consultas que se ven en pantalla, de la más reciente a la más antigua */
+async function descargarHistorialPDF(
+  consultas: Consulta[],
+  filtros: FiltrosHistorial,
+) {
+  await descargarPDF({
+    nombreArchivo: `med-ia-mi-historial-${fechaParaArchivo()}.pdf`,
+    titulo: "Mi historial de consultas",
+    detalles: [
+      ...describirFiltros(filtros),
+      "Orientación preliminar generada por IA: no reemplaza el diagnóstico de un médico.",
+    ],
+    columnas: ["Fecha", "Síntomas", "Especialidad", "Urgencia", "Médicos recomendados"],
+    filas: consultas.map((c) => [
+      fechaHoraLegible(c.fecha_consulta),
+      c.descripcion_sintomas,
+      c.especialidad_sugerida?.nombre ??
+        ETIQUETA_ESTADO[c.estado]?.texto ??
+        "—",
+      c.nivel_urgencia ? ETIQUETA_URGENCIA[c.nivel_urgencia].texto : "—",
+      c.medicos_sugeridos
+        ?.map(({ medico }) => medico.usuario?.nombre)
+        .filter(Boolean)
+        .join(", ") || "—",
+    ]),
+    mensajeVacio: "No hay consultas para exportar.",
+    horizontal: true,
+  });
+}
+
 // ─── Componente ────────────────────────────────────────────────────────────────
 
 export default function HistorialPage() {
@@ -101,6 +152,8 @@ export default function HistorialPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<FiltrosHistorial>(FILTROS_VACIOS);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
+  const [avisoPDF, setAvisoPDF] = useState<string | null>(null);
 
   useEffect(() => {
     triageService
@@ -126,6 +179,23 @@ export default function HistorialPage() {
     () => aplicarFiltros(consultas, filtros),
     [consultas, filtros],
   );
+
+  async function handleDescargarPDF() {
+    // CA-4: sin consultas no se genera un archivo vacío
+    if (consultasFiltradas.length === 0) {
+      setAvisoPDF("No hay registros para exportar con los filtros actuales.");
+      return;
+    }
+    setGenerandoPDF(true);
+    setAvisoPDF(null);
+    try {
+      await descargarHistorialPDF(consultasFiltradas, filtros);
+    } catch {
+      setAvisoPDF("No se pudo generar el PDF. Intentá de nuevo.");
+    } finally {
+      setGenerandoPDF(false);
+    }
+  }
 
   if (cargando) {
     return (
@@ -187,13 +257,42 @@ export default function HistorialPage() {
               <HistorialFiltros
                 filtros={filtros}
                 especialidades={especialidades}
-                onChange={setFiltros}
+                onChange={(nuevos) => {
+                  setFiltros(nuevos);
+                  setAvisoPDF(null);
+                }}
               />
 
-              <p className="text-xs text-gray-400 mb-3">
-                Mostrando {consultasFiltradas.length} de {consultas.length}{" "}
-                consultas
-              </p>
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <p className="text-xs text-gray-400">
+                  Mostrando {consultasFiltradas.length} de {consultas.length}{" "}
+                  consultas
+                </p>
+                {/* HU-064: descarga lo que se ve, con los filtros aplicados */}
+                <button
+                  type="button"
+                  onClick={handleDescargarPDF}
+                  disabled={generandoPDF}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline
+                             disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {generandoPDF ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="w-3.5 h-3.5" />
+                  )}
+                  Descargar PDF
+                </button>
+              </div>
+
+              {avisoPDF && (
+                <p
+                  role="status"
+                  className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-3"
+                >
+                  {avisoPDF}
+                </p>
+              )}
 
               {/* Sin resultados con los filtros */}
               {consultasFiltradas.length === 0 && (

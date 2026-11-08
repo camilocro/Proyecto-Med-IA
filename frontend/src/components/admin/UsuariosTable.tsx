@@ -2,7 +2,16 @@
 
 import { useState, useMemo } from "react";
 import { adminService, UsuarioAdmin } from "@/services/admin.service";
-import { Loader2, AlertCircle, Search, X } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  Search,
+  X,
+  FileSpreadsheet,
+  ClipboardList,
+} from "lucide-react";
+import HistorialUsuarioModal from "./HistorialUsuarioModal";
+import { descargarCSV, fechaParaArchivo } from "@/lib/exportar";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -38,6 +47,8 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
   const [cambiando, setCambiando] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [avisoExportacion, setAvisoExportacion] = useState<string | null>(null);
+  const [historialDe, setHistorialDe] = useState<UsuarioAdmin | null>(null);
 
   // Filtra en tiempo real por nombre o correo (HU-049)
   const usuariosFiltrados = useMemo(() => {
@@ -49,6 +60,26 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
         normalizar(u.correo).includes(termino),
     );
   }, [usuarios, busqueda]);
+
+  /** HU-050: exporta lo que se ve, respetando la búsqueda activa (CA-3) */
+  function exportarCSV() {
+    if (usuariosFiltrados.length === 0) {
+      setAvisoExportacion("No hay usuarios para exportar con la búsqueda actual."); // CA-4
+      return;
+    }
+    setAvisoExportacion(null);
+    descargarCSV(
+      `med-ia-usuarios-${fechaParaArchivo()}.csv`,
+      ["Nombre", "Correo", "Rol", "Fecha de registro", "Estado"],
+      usuariosFiltrados.map((u) => [
+        u.nombre,
+        u.correo,
+        ROL_LABEL[u.rol] ?? u.rol,
+        new Date(u.created_at).toLocaleDateString("es-BO"),
+        u.activo ? "Activo" : "Inactivo",
+      ]),
+    );
+  }
 
   async function toggleEstado(usuario: UsuarioAdmin) {
     setCambiando(usuario.id_usuario);
@@ -93,7 +124,10 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
           <input
             type="search"
             value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setAvisoExportacion(null);
+            }}
             placeholder="Buscar por nombre o correo..."
             aria-label="Buscar usuarios por nombre o correo"
             className="input-field py-2 pl-9 pr-9"
@@ -112,7 +146,25 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
         <p className="text-xs text-gray-400 whitespace-nowrap">
           {usuariosFiltrados.length} de {usuarios.length} usuarios
         </p>
+        <button
+          type="button"
+          onClick={exportarCSV}
+          className="flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-gray-200
+                     text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
+          Exportar CSV
+        </button>
       </div>
+
+      {avisoExportacion && (
+        <p
+          role="status"
+          className="px-6 py-3 text-sm text-amber-700 bg-amber-50 border-b border-amber-100"
+        >
+          {avisoExportacion}
+        </p>
+      )}
 
       {error && (
         <div
@@ -126,14 +178,14 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
 
       {/* Solo la tabla se desliza horizontalmente en el celular */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px]">
+        <table className="w-full min-w-[720px]">
           <thead className="bg-gray-50">
             <tr className="text-xs text-gray-400 uppercase tracking-wider">
               <th className="px-6 py-3 text-left font-medium">Nombre</th>
               <th className="px-6 py-3 text-left font-medium">Correo</th>
               <th className="px-6 py-3 text-left font-medium">Rol</th>
               <th className="px-6 py-3 text-left font-medium">Estado</th>
-              <th className="px-6 py-3 text-center font-medium">Acción</th>
+              <th className="px-6 py-3 text-center font-medium">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -178,8 +230,21 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
                   </span>
                 </td>
 
-                {/* Acción — admins no se pueden desactivar */}
-                <td className="px-6 py-4 text-center">
+                {/* Acciones — admins no se pueden desactivar */}
+                <td className="px-6 py-4">
+                  <div className="flex items-center justify-center gap-2">
+                  {/* HU-026: historial de consultas, solo los pacientes tienen */}
+                  {u.rol === "paciente" && (
+                    <button
+                      type="button"
+                      onClick={() => setHistorialDe(u)}
+                      className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-primary/20
+                                 text-primary hover:bg-primary-100/50 transition-colors whitespace-nowrap"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      Ver consultas
+                    </button>
+                  )}
                   {u.rol === "administrador" ? (
                     <span className="text-xs text-gray-300 italic">—</span>
                   ) : (
@@ -202,12 +267,20 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
                       )}
                     </button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {historialDe && (
+        <HistorialUsuarioModal
+          usuario={historialDe}
+          onCerrar={() => setHistorialDe(null)}
+        />
+      )}
     </div>
   );
 }

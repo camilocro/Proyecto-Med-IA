@@ -227,7 +227,14 @@ export async function obtenerHistorialPaciente(idUsuario: number) {
   return prisma.consulta.findMany({
     where: { id_paciente: paciente.id_paciente },
     orderBy: { fecha_consulta: "desc" },
-    include: { especialidad_sugerida: true },
+    include: {
+      especialidad_sugerida: true,
+      // Solo el nombre: lo usa el PDF del historial (HU-064 CA-2)
+      medicos_sugeridos: {
+        orderBy: { orden_sugerencia: "asc" },
+        select: { medico: { select: { usuario: { select: { nombre: true } } } } },
+      },
+    },
   });
 }
 

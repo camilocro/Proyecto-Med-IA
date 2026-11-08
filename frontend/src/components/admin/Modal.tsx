@@ -12,10 +12,12 @@ interface ModalProps {
   bloqueado?: boolean
   /** Botones de acción: quedan fijos abajo y siempre visibles aunque el contenido tenga scroll */
   pie?:       React.ReactNode
+  /** "amplio" para contenido con más datos (detalle de una consulta, historial) */
+  ancho?:     'normal' | 'amplio'
   children:   React.ReactNode
 }
 
-export default function Modal({ abierto, titulo, subtitulo, onCerrar, bloqueado = false, pie, children }: ModalProps) {
+export default function Modal({ abierto, titulo, subtitulo, onCerrar, bloqueado = false, pie, ancho = 'normal', children }: ModalProps) {
   // Cerrar con Escape
   useEffect(() => {
     if (!abierto) return
@@ -38,8 +40,8 @@ export default function Modal({ abierto, titulo, subtitulo, onCerrar, bloqueado 
         aria-modal="true"
         aria-label={titulo}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl
-                   max-h-[92vh] flex flex-col"
+        className={`bg-white w-full ${ancho === 'amplio' ? 'sm:max-w-3xl' : 'sm:max-w-lg'} rounded-t-2xl sm:rounded-2xl shadow-xl
+                    max-h-[92vh] flex flex-col`}
       >
         <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
           <div>

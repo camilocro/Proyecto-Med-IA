@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Medico } from '@/types'
 import { medicoPanelService } from '@/services/medicoPanel.service'
 import Modal from '@/components/admin/Modal'
+import AvatarMedico from '@/components/ui/AvatarMedico'
 import { User, Phone, MapPin, Building2, FileText, Loader2, AlertTriangle } from 'lucide-react'
 
 interface MedicoDetalleModalProps {
@@ -77,9 +78,16 @@ export default function MedicoDetalleModal({ medico: inicial, onCerrar }: Medico
       <div className="space-y-5">
         {/* Cabecera */}
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-            <User className="w-7 h-7 text-primary" />
-          </div>
+          <AvatarMedico
+            fotoUrl={medico.foto_url}
+            nombre={nombre}
+            className="w-14 h-14 rounded-full"
+            sinFoto={
+              <div className="w-14 h-14 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                <User className="w-7 h-7 text-primary" />
+              </div>
+            }
+          />
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-900 break-words">{nombre}</p>
             {especialidad && <p className="text-sm text-primary-600">{especialidad.nombre}</p>}

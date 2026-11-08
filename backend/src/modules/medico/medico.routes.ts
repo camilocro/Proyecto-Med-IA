@@ -5,6 +5,9 @@ import {
   miPerfil,
   actualizarPerfil,
   toggleDisponibilidad,
+  estadisticas,
+  actualizarFoto,
+  eliminarFoto,
   listar,
   centros,
   crear,
@@ -23,6 +26,9 @@ router.get('/especialidad/:idEspecialidad',  porEspecialidad)
 router.get('/perfil',                        requireAuth, soloMedico, miPerfil)
 router.patch('/perfil',                      requireAuth, soloMedico, actualizarPerfil)
 router.patch('/disponibilidad',              requireAuth, soloMedico, toggleDisponibilidad)
+router.get('/estadisticas',                  requireAuth, soloMedico, estadisticas)
+router.patch('/perfil/foto',                 requireAuth, soloMedico, actualizarFoto)
+router.delete('/perfil/foto',                requireAuth, soloMedico, eliminarFoto)
 router.get('/centros',                       requireAuth, soloAdmin,  centros)
 router.get('/',                              requireAuth, soloAdmin,  listar)
 router.post('/',                             requireAuth, soloAdmin,  crear)
