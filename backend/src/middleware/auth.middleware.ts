@@ -53,11 +53,8 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   const payload = verifyToken(token)
   if (!payload) return next(unauthorized('Token inválido o expirado'))
 
-  try {
-    if (!(await cuentaActiva(payload.id_usuario))) return next(unauthorized(MENSAJE_CUENTA_DESACTIVADA))
-  } catch (error) {
-    return next(error)
-  }
+  // Si la base de datos falla, express-async-errors pasa el error al middleware central
+  if (!(await cuentaActiva(payload.id_usuario))) return next(unauthorized(MENSAJE_CUENTA_DESACTIVADA))
 
   ;(req as AuthenticatedRequest).usuario = payload
   next()
@@ -73,11 +70,7 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
   if (token) {
     const payload = verifyToken(token)
     if (payload) {
-      try {
-        if (!(await cuentaActiva(payload.id_usuario))) return next(unauthorized(MENSAJE_CUENTA_DESACTIVADA))
-      } catch (error) {
-        return next(error)
-      }
+      if (!(await cuentaActiva(payload.id_usuario))) return next(unauthorized(MENSAJE_CUENTA_DESACTIVADA))
       ;(req as AuthenticatedRequest).usuario = payload
     }
   }
