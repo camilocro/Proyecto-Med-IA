@@ -1,11 +1,12 @@
+import { Prisma, NivelUrgencia, EstadoConsulta } from "@prisma/client";
 import prisma from "../../config/prisma";
 import { badRequest, notFound } from "../../errors/AppError";
-import { getTodayRange } from "../../shared/fechas";
+import { getTodayRange, RangoFechas } from "../../shared/fechas";
 import {
   CONFIG_KEY_DAILY_LIMIT,
-  MAX_CONSULTAS_RECIENTES_ADMIN,
   DIAS_GRAFICO_CONSULTAS,
   MAX_LIMITE_DIARIO,
+  MAX_MEDICOS_RANKING,
 } from "../../constants";
 
 // Campos seguros del usuario: nunca se devuelve el password_hash
@@ -38,17 +39,6 @@ export async function getDashboardMetrics() {
     ]);
 
   return { consultasHoy, urgenciasAltas, medicosActivos, usuariosRegistrados };
-}
-
-export async function getConsultasRecientes() {
-  return prisma.consulta.findMany({
-    orderBy: { fecha_consulta: "desc" },
-    take: MAX_CONSULTAS_RECIENTES_ADMIN,
-    include: {
-      especialidad_sugerida: true,
-      paciente: { include: { usuario: { select: { nombre: true } } } },
-    },
-  });
 }
 
 export async function getUsuarios() {
@@ -195,4 +185,195 @@ export async function getEstadisticas() {
       especialidadesConMedicos,
     },
   };
+}
+
+// ─── Consultas del panel (HU-031, HU-026, HU-068) ────────────────────────────
+
+const INCLUDE_CONSULTA_LISTA = {
+  especialidad_sugerida: { select: { nombre: true } },
+  paciente: {
+    include: { usuario: { select: { id_usuario: true, nombre: true } } },
+  },
+} satisfies Prisma.ConsultaInclude;
+
+/** Todo lo que el admin necesita para auditar una consulta (HU-026 CA-1) */
+const INCLUDE_CONSULTA_DETALLE = {
+  ...INCLUDE_CONSULTA_LISTA,
+  sintomas_extraidos: { orderBy: { relevancia: "desc" } },
+  rondas: {
+    orderBy: { numero_ronda: "asc" },
+    include: { preguntas: { orderBy: { orden: "asc" } } },
+  },
+  medicos_sugeridos: {
+    orderBy: { orden_sugerencia: "asc" },
+    include: {
+      medico: {
+        include: {
+          usuario: { select: { nombre: true } },
+          especialidad: { select: { nombre: true } },
+          centro_salud: { select: { nombre: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ConsultaInclude;
+
+export interface FiltrosConsultas {
+  fecha: RangoFechas;
+  urgencia?: NivelUrgencia;
+  estado?: EstadoConsulta;
+  pagina: number;
+  porPagina: number;
+}
+
+/** Quién mira datos de pacientes y desde dónde: queda en AuditoriaAcceso (HU-026 CA-2) */
+export interface Auditor {
+  idAdmin: number;
+  ip: string;
+}
+
+async function registrarAuditoria(auditor: Auditor, accion: string, exitoso: boolean) {
+  await prisma.auditoriaAcceso.create({
+    data: {
+      id_usuario: auditor.idAdmin,
+      accion,
+      ip_address: auditor.ip,
+      exitoso,
+    },
+  });
+}
+
+/** HU-031: lista paginada, de la más reciente a la más antigua. También la usa el Dashboard. */
+export async function listarConsultas(filtros: FiltrosConsultas) {
+  const where: Prisma.ConsultaWhereInput = {
+    fecha_consulta: filtros.fecha,
+    nivel_urgencia: filtros.urgencia,
+    estado: filtros.estado,
+  };
+
+  const [consultas, total] = await Promise.all([
+    prisma.consulta.findMany({
+      where,
+      orderBy: { fecha_consulta: "desc" },
+      skip: (filtros.pagina - 1) * filtros.porPagina,
+      take: filtros.porPagina,
+      include: INCLUDE_CONSULTA_LISTA,
+    }),
+    prisma.consulta.count({ where }),
+  ]);
+
+  return { consultas, total, pagina: filtros.pagina, porPagina: filtros.porPagina };
+}
+
+export async function getDetalleConsulta(idConsulta: number, auditor: Auditor) {
+  const consulta = await prisma.consulta.findUnique({
+    where: { id_consulta: idConsulta },
+    include: INCLUDE_CONSULTA_DETALLE,
+  });
+  await registrarAuditoria(auditor, `ver_consulta:${idConsulta}`, Boolean(consulta));
+  if (!consulta) throw notFound("Consulta");
+  return consulta;
+}
+
+/** HU-026: historial completo de un usuario, con filtro opcional por fechas (CA-4) */
+export async function getHistorialUsuario(
+  idUsuario: number,
+  fecha: RangoFechas,
+  auditor: Auditor,
+) {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id_usuario: idUsuario },
+    select: {
+      id_usuario: true,
+      nombre: true,
+      correo: true,
+      rol: true,
+      paciente: { select: { id_paciente: true } },
+    },
+  });
+  await registrarAuditoria(auditor, `ver_historial:${idUsuario}`, Boolean(usuario));
+  if (!usuario) throw notFound("Usuario");
+
+  // Médicos y administradores no tienen consultas: el frontend muestra "no hay consultas" (CA-3)
+  const consultas = usuario.paciente
+    ? await prisma.consulta.findMany({
+        where: { id_paciente: usuario.paciente.id_paciente, fecha_consulta: fecha },
+        orderBy: { fecha_consulta: "desc" },
+        include: INCLUDE_CONSULTA_DETALLE,
+      })
+    : [];
+
+  return {
+    usuario: {
+      id_usuario: usuario.id_usuario,
+      nombre: usuario.nombre,
+      correo: usuario.correo,
+      rol: usuario.rol,
+    },
+    consultas,
+  };
+}
+
+// ─── Médicos con más derivaciones (HU-069) ───────────────────────────────────
+
+export interface SugerenciaRanking {
+  id_consulta: number;
+  fecha: Date;
+  especialidad: string;
+}
+
+export interface MedicoRanking {
+  id_medico: number;
+  nombre: string;
+  especialidad: string;
+  total: number;
+  sugerencias: SugerenciaRanking[]; // CA-4: cuándo y para qué especialidad
+}
+
+export async function getRankingMedicos(fecha: RangoFechas): Promise<MedicoRanking[]> {
+  const sugerencias = await prisma.medicoSugerido.findMany({
+    where: { consulta: { fecha_consulta: fecha } },
+    select: {
+      id_medico: true,
+      medico: {
+        select: {
+          usuario: { select: { nombre: true } },
+          especialidad: { select: { nombre: true } },
+        },
+      },
+      consulta: {
+        select: {
+          id_consulta: true,
+          fecha_consulta: true,
+          especialidad_sugerida: { select: { nombre: true } },
+        },
+      },
+    },
+  });
+
+  const porMedico = new Map<number, MedicoRanking>();
+  for (const { id_medico, medico, consulta } of sugerencias) {
+    const fila: MedicoRanking = porMedico.get(id_medico) ?? {
+      id_medico,
+      nombre: medico.usuario.nombre,
+      especialidad: medico.especialidad.nombre,
+      total: 0,
+      sugerencias: [],
+    };
+    fila.total += 1;
+    fila.sugerencias.push({
+      id_consulta: consulta.id_consulta,
+      fecha: consulta.fecha_consulta,
+      especialidad: consulta.especialidad_sugerida?.nombre ?? medico.especialidad.nombre,
+    });
+    porMedico.set(id_medico, fila);
+  }
+
+  return [...porMedico.values()]
+    .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre, "es")) // CA-2: empate → alfabético
+    .slice(0, MAX_MEDICOS_RANKING)
+    .map((m) => ({
+      ...m,
+      sugerencias: m.sugerencias.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()),
+    }));
 }
