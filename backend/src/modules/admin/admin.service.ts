@@ -1,7 +1,7 @@
 import { Prisma, NivelUrgencia, EstadoConsulta } from "@prisma/client";
 import prisma from "../../config/prisma";
 import { badRequest, notFound } from "../../errors/AppError";
-import { getTodayRange, RangoFechas } from "../../shared/fechas";
+import { getTodayRange, formatearFechaLocal, RangoFechas } from "../../shared/fechas";
 import {
   CONFIG_KEY_DAILY_LIMIT,
   DIAS_GRAFICO_CONSULTAS,
@@ -100,14 +100,6 @@ export async function setConfiguracion(clave: string, valor: string) {
 
 // ─── Estadísticas del panel (HU-032) ─────────────────────────────────────────
 
-/** 'YYYY-MM-DD' en hora local del servidor (la misma que usa el límite diario) */
-function claveDia(fecha: Date): string {
-  const anio = fecha.getFullYear();
-  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
-  const dia = String(fecha.getDate()).padStart(2, "0");
-  return `${anio}-${mes}-${dia}`;
-}
-
 export async function getEstadisticas() {
   const { start: hoy, end: manana } = getTodayRange();
   const desde = new Date(hoy);
@@ -146,10 +138,10 @@ export async function getEstadisticas() {
   for (let i = 0; i < DIAS_GRAFICO_CONSULTAS; i++) {
     const dia = new Date(desde);
     dia.setDate(dia.getDate() + i);
-    conteoPorDia.set(claveDia(dia), 0);
+    conteoPorDia.set(formatearFechaLocal(dia), 0);
   }
   for (const { fecha_consulta } of consultasRecientes) {
-    const clave = claveDia(fecha_consulta);
+    const clave = formatearFechaLocal(fecha_consulta);
     if (conteoPorDia.has(clave))
       conteoPorDia.set(clave, conteoPorDia.get(clave)! + 1);
   }
@@ -207,8 +199,10 @@ const INCLUDE_CONSULTA_DETALLE = {
   medicos_sugeridos: {
     orderBy: { orden_sugerencia: "asc" },
     include: {
+      // Sin foto_url: en el historial de un paciente se repetiría en cada consulta
       medico: {
-        include: {
+        select: {
+          id_medico: true,
           usuario: { select: { nombre: true } },
           especialidad: { select: { nombre: true } },
           centro_salud: { select: { nombre: true } },
