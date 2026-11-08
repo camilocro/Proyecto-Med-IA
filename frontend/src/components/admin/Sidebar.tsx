@@ -22,6 +22,7 @@ export type SeccionAdmin =
   | "usuarios"
   | "medicos"
   | "especialidades"
+  | "consultas"
   | "configuracion";
 
 interface EnlaceSidebar {
@@ -37,7 +38,7 @@ const ENLACES: EnlaceSidebar[] = [
   { label: "Usuarios", Icono: Users, seccion: "usuarios" },
   { label: "Médicos", Icono: Stethoscope, seccion: "medicos" },
   { label: "Especialidades", Icono: BookOpen, seccion: "especialidades" },
-  { label: "Consultas", Icono: ClipboardList },
+  { label: "Consultas", Icono: ClipboardList, seccion: "consultas" },
   { label: "Configuración", Icono: Settings, seccion: "configuracion" },
 ];
 
