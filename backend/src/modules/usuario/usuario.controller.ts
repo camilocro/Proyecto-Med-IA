@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   obtenerPerfil,
   actualizarPerfil,
+  eliminarCuenta,
   CambiosPerfil,
 } from "./usuario.service";
 import { ok, AuthenticatedRequest } from "../../shared/types";
@@ -78,4 +79,15 @@ export async function editarPerfil(req: Request, res: Response) {
   const { id_usuario } = (req as AuthenticatedRequest).usuario;
   const cambios = validarCambios(req.body);
   res.json(ok(await actualizarPerfil(id_usuario, cambios)));
+}
+/** HU-048: pide la contraseña para confirmar que es el dueño de la cuenta (no basta con una sesión abierta). */
+export async function eliminarMiCuenta(req: Request, res: Response) {
+  const { id_usuario } = (req as AuthenticatedRequest).usuario;
+  const { password } = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof password !== "string" || !password) {
+    throw badRequest("Ingresa tu contraseña para confirmar");
+  }
+
+  await eliminarCuenta(id_usuario, password, req.ip ?? "desconocida");
+  res.json(ok({ message: "Tu cuenta fue eliminada." }));
 }

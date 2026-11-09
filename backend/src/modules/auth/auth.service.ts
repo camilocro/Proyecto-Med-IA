@@ -113,7 +113,9 @@ export async function loginUsuario(input: LoginInput) {
   const usuario = await prisma.usuario.findUnique({
     where: { correo: input.correo },
   });
-  if (!usuario) throw unauthorized("Credenciales inválidas");
+  // HU-048: una cuenta eliminada responde igual que una que no existe
+  if (!usuario || usuario.eliminado_en)
+    throw unauthorized("Credenciales inválidas");
 
   if (usuario.bloqueado_hasta && usuario.bloqueado_hasta > new Date()) {
     throw unauthorized(

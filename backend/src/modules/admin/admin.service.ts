@@ -1,7 +1,11 @@
 import { Prisma, NivelUrgencia, EstadoConsulta } from "@prisma/client";
 import prisma from "../../config/prisma";
 import { badRequest, notFound } from "../../errors/AppError";
-import { getTodayRange, formatearFechaLocal, RangoFechas } from "../../shared/fechas";
+import {
+  getTodayRange,
+  formatearFechaLocal,
+  RangoFechas,
+} from "../../shared/fechas";
 import {
   CONFIG_KEY_DAILY_LIMIT,
   DIAS_GRAFICO_CONSULTAS,
@@ -43,6 +47,7 @@ export async function getDashboardMetrics() {
 
 export async function getUsuarios() {
   return prisma.usuario.findMany({
+    where: { eliminado_en: null }, // HU-048: las cuentas eliminadas no se listan
     select: SELECT_USUARIO_PUBLICO,
     orderBy: { created_at: "desc" },
   });
@@ -60,7 +65,8 @@ export async function cambiarEstadoUsuario(
   const existe = await prisma.usuario.findUnique({
     where: { id_usuario: idUsuario },
   });
-  if (!existe) throw notFound("Usuario");
+  // Una cuenta eliminada por su dueño no se puede reactivar desde el panel
+  if (!existe || existe.eliminado_en) throw notFound("Usuario");
 
   return prisma.usuario.update({
     where: { id_usuario: idUsuario },
@@ -226,7 +232,11 @@ export interface Auditor {
   ip: string;
 }
 
-async function registrarAuditoria(auditor: Auditor, accion: string, exitoso: boolean) {
+async function registrarAuditoria(
+  auditor: Auditor,
+  accion: string,
+  exitoso: boolean,
+) {
   await prisma.auditoriaAcceso.create({
     data: {
       id_usuario: auditor.idAdmin,
@@ -256,7 +266,12 @@ export async function listarConsultas(filtros: FiltrosConsultas) {
     prisma.consulta.count({ where }),
   ]);
 
-  return { consultas, total, pagina: filtros.pagina, porPagina: filtros.porPagina };
+  return {
+    consultas,
+    total,
+    pagina: filtros.pagina,
+    porPagina: filtros.porPagina,
+  };
 }
 
 export async function getDetalleConsulta(idConsulta: number, auditor: Auditor) {
@@ -264,7 +279,11 @@ export async function getDetalleConsulta(idConsulta: number, auditor: Auditor) {
     where: { id_consulta: idConsulta },
     include: INCLUDE_CONSULTA_DETALLE,
   });
-  await registrarAuditoria(auditor, `ver_consulta:${idConsulta}`, Boolean(consulta));
+  await registrarAuditoria(
+    auditor,
+    `ver_consulta:${idConsulta}`,
+    Boolean(consulta),
+  );
   if (!consulta) throw notFound("Consulta");
   return consulta;
 }
@@ -285,13 +304,20 @@ export async function getHistorialUsuario(
       paciente: { select: { id_paciente: true } },
     },
   });
-  await registrarAuditoria(auditor, `ver_historial:${idUsuario}`, Boolean(usuario));
+  await registrarAuditoria(
+    auditor,
+    `ver_historial:${idUsuario}`,
+    Boolean(usuario),
+  );
   if (!usuario) throw notFound("Usuario");
 
   // Médicos y administradores no tienen consultas: el frontend muestra "no hay consultas" (CA-3)
   const consultas = usuario.paciente
     ? await prisma.consulta.findMany({
-        where: { id_paciente: usuario.paciente.id_paciente, fecha_consulta: fecha },
+        where: {
+          id_paciente: usuario.paciente.id_paciente,
+          fecha_consulta: fecha,
+        },
         orderBy: { fecha_consulta: "desc" },
         include: INCLUDE_CONSULTA_DETALLE,
       })
@@ -324,7 +350,9 @@ export interface MedicoRanking {
   sugerencias: SugerenciaRanking[]; // CA-4: cuándo y para qué especialidad
 }
 
-export async function getRankingMedicos(fecha: RangoFechas): Promise<MedicoRanking[]> {
+export async function getRankingMedicos(
+  fecha: RangoFechas,
+): Promise<MedicoRanking[]> {
   const sugerencias = await prisma.medicoSugerido.findMany({
     where: { consulta: { fecha_consulta: fecha } },
     select: {
@@ -358,7 +386,8 @@ export async function getRankingMedicos(fecha: RangoFechas): Promise<MedicoRanki
     fila.sugerencias.push({
       id_consulta: consulta.id_consulta,
       fecha: consulta.fecha_consulta,
-      especialidad: consulta.especialidad_sugerida?.nombre ?? medico.especialidad.nombre,
+      especialidad:
+        consulta.especialidad_sugerida?.nombre ?? medico.especialidad.nombre,
     });
     porMedico.set(id_medico, fila);
   }
@@ -368,6 +397,8 @@ export async function getRankingMedicos(fecha: RangoFechas): Promise<MedicoRanki
     .slice(0, MAX_MEDICOS_RANKING)
     .map((m) => ({
       ...m,
-      sugerencias: m.sugerencias.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()),
+      sugerencias: m.sugerencias.sort(
+        (a, b) => b.fecha.getTime() - a.fecha.getTime(),
+      ),
     }));
 }

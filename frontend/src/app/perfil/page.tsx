@@ -23,6 +23,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import PreferenciasCorreo from "@/components/perfil/PreferenciasCorreo";
+import EliminarCuenta from "@/components/perfil/EliminarCuenta";
 
 // Mismas reglas que valida el backend (usuario.controller.ts)
 const MIN_LONGITUD_NOMBRE = 2;
@@ -562,6 +563,9 @@ export default function PerfilPage() {
               onActualizado={setPerfil}
             />
           )}
+
+          {/* ── Eliminar mi cuenta (HU-048): solo pacientes ── */}
+          {perfil.rol === "paciente" && <EliminarCuenta />}
         </div>
       </main>
     </>

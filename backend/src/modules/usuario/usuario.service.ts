@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import prisma from "../../config/prisma";
-import { badRequest, notFound } from "../../errors/AppError";
+import { badRequest, forbidden, notFound } from "../../errors/AppError";
 import { SALT_ROUNDS } from "../../constants";
 
 const SELECT_PERFIL = {
@@ -70,4 +70,61 @@ export async function actualizarPerfil(
     data: datos,
     select: SELECT_PERFIL,
   });
+}
+/**
+ * HU-048: el paciente elimina su cuenta. Por política de seguridad NO se borra nada de la base
+ * (borrado lógico): la cuenta queda marcada con eliminado_en y deja de existir para el usuario.
+ * Todo en una transacción: o se aplica todo, o nada.
+ */
+export async function eliminarCuenta(
+  idUsuario: number,
+  password: string,
+  ip: string,
+): Promise<void> {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id_usuario: idUsuario },
+    include: { paciente: true },
+  });
+  if (!usuario || usuario.eliminado_en) throw notFound("Usuario");
+  if (usuario.rol !== "paciente" || !usuario.paciente) {
+    throw forbidden(
+      "Solo los pacientes pueden eliminar su cuenta desde el perfil",
+    );
+  }
+
+  // 400 y no 401: un 401 haría que el frontend cerrara la sesión al equivocarse de contraseña
+  const passwordValida = await bcrypt.compare(password, usuario.password_hash);
+  if (!passwordValida) throw badRequest("La contraseña es incorrecta");
+
+  await prisma.$transaction([
+    // Sus consultas dejan de verse en su historial, pero se conservan para auditoría y estadísticas
+    prisma.consulta.updateMany({
+      where: { id_paciente: usuario.paciente.id_paciente },
+      data: { oculta_paciente: true },
+    }),
+    // Ningún enlace de correo pendiente (recuperar, verificar) puede usarse
+    prisma.tokenRecuperacion.updateMany({
+      where: { id_usuario: idUsuario, usado: false },
+      data: { usado: true },
+    }),
+    // La cuenta se marca como eliminada; token_version cierra todas sus sesiones
+    prisma.usuario.update({
+      where: { id_usuario: idUsuario },
+      data: {
+        eliminado_en: new Date(),
+        activo: false,
+        recibir_correos: false,
+        doble_factor: false,
+        token_version: { increment: 1 },
+      },
+    }),
+    prisma.auditoriaAcceso.create({
+      data: {
+        id_usuario: idUsuario,
+        accion: "eliminar_cuenta",
+        ip_address: ip,
+        exitoso: true,
+      },
+    }),
+  ]);
 }

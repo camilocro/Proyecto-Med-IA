@@ -35,4 +35,11 @@ export const perfilService = {
       .patch<ApiResponse<PerfilUsuario>>("/usuarios/perfil", cambios)
       .then((res: { data: ApiResponse<PerfilUsuario> }) => res.data.data);
   },
+
+  eliminarCuenta(password: string): Promise<void> {
+    // DELETE con body: axios lo envía en "data"
+    return apiClient
+      .delete("/usuarios/perfil", { data: { password } })
+      .then(() => undefined);
+  },
 };

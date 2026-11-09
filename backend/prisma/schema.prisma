@@ -52,6 +52,7 @@ model Usuario {
     token_version     Int        @default(0)     // HU-003 CA-3: cerrar sesión invalida los tokens anteriores
   doble_factor      Boolean    @default(false) // HU-046
   recibir_correos   Boolean    @default(true)  // HU-070 CA-4
+    eliminado_en      DateTime?                  // HU-048: borrado lógico, la cuenta se oculta pero no se borra
   created_at        DateTime   @default(now())
   updated_at        DateTime   @updatedAt
 
