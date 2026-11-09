@@ -14,7 +14,7 @@ import {
   MOTIVO_CASO_COMPLEJO,
   MAX_CONSULTAS_HISTORIAL_IA,
 } from "../../constants";
-import { getTodayRange } from "../../shared/fechas";
+import { getTodayRange, formatearFechaLocal } from "../../shared/fechas";
 import {
   analizarSintomas,
   ErrorIA,
@@ -35,7 +35,6 @@ interface ContextoConsulta {
 export interface Solicitante {
   idPaciente?: number;
   sesionAnonimo: string;
-  esAdmin: boolean;
 }
 
 export interface RespuestaRonda {
@@ -124,9 +123,9 @@ export async function obtenerConsulta(
   idConsulta: number,
   solicitante: Solicitante,
 ) {
+  // El administrador usa GET /admin/consultas/:id, que deja el acceso en la auditoría (HU-026)
   const consulta = await cargarConsultaCompleta(idConsulta);
-  if (!puedeAcceder(consulta, solicitante, { permitirAdmin: true }))
-    throw notFound("Consulta");
+  if (!puedeAcceder(consulta, solicitante)) throw notFound("Consulta");
   return consulta;
 }
 
@@ -227,7 +226,14 @@ export async function obtenerHistorialPaciente(idUsuario: number) {
   return prisma.consulta.findMany({
     where: { id_paciente: paciente.id_paciente },
     orderBy: { fecha_consulta: "desc" },
-    include: { especialidad_sugerida: true },
+    include: {
+      especialidad_sugerida: true,
+      // Solo el nombre: lo usa el PDF del historial (HU-064 CA-2)
+      medicos_sugeridos: {
+        orderBy: { orden_sugerencia: "asc" },
+        select: { medico: { select: { usuario: { select: { nombre: true } } } } },
+      },
+    },
   });
 }
 
@@ -246,9 +252,7 @@ async function cargarConsultaCompleta(idConsulta: number) {
 function puedeAcceder(
   consulta: { id_paciente: number | null; sesion_anonimo: string | null },
   solicitante: Solicitante,
-  opciones: { permitirAdmin?: boolean } = {},
 ): boolean {
-  if (opciones.permitirAdmin && solicitante.esAdmin) return true;
   if (consulta.id_paciente !== null)
     return consulta.id_paciente === solicitante.idPaciente;
   return consulta.sesion_anonimo === solicitante.sesionAnonimo;
@@ -324,13 +328,6 @@ async function procesarAnalisis(idConsulta: number): Promise<void> {
   );
 }
 
-/** 'YYYY-MM-DD' en hora local del servidor (la misma que usa el límite diario) */
-function fechaLocal(fecha: Date): string {
-  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
-  const dia = String(fecha.getDate()).padStart(2, "0");
-  return `${fecha.getFullYear()}-${mes}-${dia}`;
-}
-
 /** Últimas consultas completadas del paciente, resumidas para la IA (sin la consulta actual). */
 async function obtenerHistorialParaIA(
   idPaciente: number,
@@ -352,7 +349,7 @@ async function obtenerHistorialParaIA(
   });
 
   return anteriores.map((c) => ({
-    fecha: fechaLocal(c.fecha_consulta),
+    fecha: formatearFechaLocal(c.fecha_consulta),
     especialidad: c.especialidad_sugerida?.nombre ?? "sin especialidad",
     nivelUrgencia: c.nivel_urgencia ?? "no indicada",
   }));

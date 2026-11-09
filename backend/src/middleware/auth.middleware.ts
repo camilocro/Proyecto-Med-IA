@@ -67,13 +67,9 @@ export async function requireAuth(
   const payload = verifyToken(token);
   if (!payload) return next(unauthorized("Token inválido o expirado"));
 
-  try {
-    const motivo = await validarSesion(payload);
-    if (motivo) return next(unauthorized(motivo));
-  } catch (error) {
-    return next(error);
-  }
-
+  // Si la base de datos falla, express-async-errors pasa el error al middleware central
+  const motivo = await validarSesion(payload);
+  if (motivo) return next(unauthorized(motivo));
   (req as AuthenticatedRequest).usuario = payload;
   next();
 }
@@ -93,12 +89,8 @@ export async function optionalAuth(
   if (token) {
     const payload = verifyToken(token);
     if (payload) {
-      try {
-        const motivo = await validarSesion(payload);
-        if (motivo) return next(unauthorized(motivo));
-      } catch (error) {
-        return next(error);
-      }
+      const motivo = await validarSesion(payload);
+      if (motivo) return next(unauthorized(motivo));
       (req as AuthenticatedRequest).usuario = payload;
     }
   }

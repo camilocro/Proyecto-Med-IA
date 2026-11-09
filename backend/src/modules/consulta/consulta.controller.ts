@@ -66,7 +66,7 @@ function parsearId(valor: string, nombre: string): number {
   return id;
 }
 
-/** Quién hace la petición: paciente registrado, sesión anónima y si es admin. */
+/** Quién hace la petición: paciente registrado o sesión anónima. */
 async function obtenerSolicitante(req: Request): Promise<Solicitante> {
   const usuario = (req as AuthenticatedRequest).usuario;
   return {
@@ -74,7 +74,6 @@ async function obtenerSolicitante(req: Request): Promise<Solicitante> {
       ? await getIdPacientePorUsuario(usuario.id_usuario)
       : undefined,
     sesionAnonimo: obtenerIdentificadorAnonimo(req),
-    esAdmin: usuario?.rol === "administrador",
   };
 }
 

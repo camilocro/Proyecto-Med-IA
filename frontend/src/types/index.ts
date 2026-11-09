@@ -2,7 +2,8 @@
 
 export type RolUsuario     = 'paciente' | 'medico' | 'administrador'
 export type NivelUrgencia  = 'bajo' | 'medio' | 'alto' | 'emergencia'
-export type EstadoConsulta = 'en_proceso' | 'esperando_respuestas' | 'completada' | 'cancelada'
+export type EstadoConsulta =
+  | 'en_proceso' | 'esperando_respuestas' | 'esperando_confirmacion' | 'completada' | 'cancelada'
 
 // ─── Entidades ────────────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ export interface Medico {
   id_medico:               number
   descripcion_profesional: string
   telefono_contacto:       string
-  foto_url?:               string
+  foto_url?:               string | null // data URL de la foto (HU-060)
   disponible:              boolean
   usuario?:                { nombre: string }
   especialidad?:           Especialidad

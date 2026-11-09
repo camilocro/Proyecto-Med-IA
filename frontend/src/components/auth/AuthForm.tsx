@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter }    from 'next/navigation'
 import { useAuth }      from '@/hooks/useAuth'
 import { authService }  from '@/services/auth.service'
+import { mensajeDeError } from '@/lib/errores'
 import {
   RUTA_LOGIN_TRAS_REGISTRO,
   rutaInicioPorRol,
@@ -98,12 +99,6 @@ function validarRegistro(datos: {
   if (!datos.aceptaTerminos) errores.terminos = 'Debés aceptar los términos y condiciones.'
 
   return errores
-}
-
-function mensajeErrorServidor(err: unknown, porDefecto: string): string {
-  const error = err as { response?: { data?: { message?: string } } }
-  if (!error.response) return 'No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.'
-  return error.response.data?.message ?? porDefecto
 }
 
 // ── Campo de texto ────────────────────────────────────────────────────────────
@@ -237,7 +232,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
 
     const resultado = await authService.login({ correo: correoLogin.trim(), password: passwordLogin })
       .catch((err) => {
-        setError(mensajeErrorServidor(err, 'Credenciales inválidas. Verificá tus datos.'))
+        setError(mensajeDeError(err, 'Credenciales inválidas. Verificá tus datos.'))
         return null
       })
       .finally(() => setCargando(false))
@@ -264,7 +259,7 @@ export default function AuthForm({ tabInicial = 'login' }: { tabInicial?: TabAct
       nombre: nombre.trim(), correo: correoNormalizado, password: passwordReg,
     })
       .catch((err) => {
-        setError(mensajeErrorServidor(err, 'Error al crear la cuenta. Intentá de nuevo.'))
+        setError(mensajeDeError(err, 'Error al crear la cuenta. Intentá de nuevo.'))
         return null
       })
       .finally(() => setCargando(false))

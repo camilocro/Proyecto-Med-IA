@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Medico } from '@/types'
 import { Phone, MapPin, User, ChevronRight } from 'lucide-react'
 import MedicoDetalleModal from './MedicoDetalleModal'
+import AvatarMedico from '@/components/ui/AvatarMedico'
 
 interface MedicoCardProps {
   medico: Medico
@@ -30,9 +31,16 @@ export default function MedicoCard({ medico }: MedicoCardProps) {
       >
         {/* Cabecera */}
         <span className="flex items-center gap-3 mb-4">
-          <span className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-            <User className="w-6 h-6 text-primary" />
-          </span>
+          <AvatarMedico
+            fotoUrl={medico.foto_url}
+            nombre={nombre}
+            className="w-12 h-12 rounded-full"
+            sinFoto={
+              <span className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                <User className="w-6 h-6 text-primary" />
+              </span>
+            }
+          />
           <span className="block min-w-0">
             <span className="block font-semibold text-gray-900">{nombre}</span>
             <span className="block text-sm text-primary-600">{especialidad}</span>

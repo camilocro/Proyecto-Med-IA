@@ -31,7 +31,7 @@ export const MAX_LONGITUD_RESPUESTA = 500;
 export const MAX_MEDICOS_SUGERIDOS = 5;
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
-export const MAX_CONSULTAS_RECIENTES_ADMIN = 20;
+export const MAX_CONSULTAS_RECIENTES_ADMIN = 20; // también es el tamaño de página de la sección Consultas
 
 // ─── Perfil ───────────────────────────────────────────────────────────────────
 export const MIN_LONGITUD_NOMBRE = 2;
@@ -53,3 +53,9 @@ export const MAX_LONGITUD_NOMBRE_ESPECIALIDAD = 60;
 export const MIN_LONGITUD_DESCRIPCION_ESPECIALIDAD = 10;
 export const MAX_LONGITUD_DESCRIPCION_ESPECIALIDAD = 300;
 export const MAX_LIMITE_DIARIO = 100;
+
+// ─── Consultas del admin, reportes y estadísticas (Sprint 4) ─────────────────
+export const MAX_CONSULTAS_EXPORTACION = 1000; // tope de filas al exportar CSV/PDF (HU-068)
+export const MAX_MEDICOS_RANKING = 10; // HU-069
+export const DIAS_PERIODO_POR_DEFECTO = 30; // "último mes" en ranking y estadísticas
+export const MAX_BYTES_FOTO_MEDICO = 64 * 1024; // foto ya recortada a 256×256 (HU-060)
