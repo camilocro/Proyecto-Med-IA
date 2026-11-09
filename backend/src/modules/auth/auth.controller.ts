@@ -11,6 +11,12 @@ import {
   MAX_LONGITUD_NOMBRE,
   MIN_LONGITUD_PASSWORD,
 } from "../../constants";
+import {
+  solicitarRecuperacion,
+  restablecerPassword,
+  MENSAJE_ENLACE_INVALIDO,
+} from "./recuperacion.service";
+import { esTokenValido } from "../../shared/tokens";
 
 // ─── Validaciones de entrada (HU-001 CA-3/CA-4, HU-033) ──────────────────────
 // Sin estas validaciones, un body incompleto llegaba a Prisma y respondía 500.
@@ -64,6 +70,21 @@ function validarLogin(body: unknown) {
     throw badRequest("Ingresa tu contraseña");
   return { correo: correoValido, password };
 }
+/** Mismas reglas que el registro: 8+ caracteres, al menos una letra y un número. */
+function validarPasswordNueva(password: unknown): string {
+  if (typeof password !== "string" || password.length < MIN_LONGITUD_PASSWORD) {
+    throw badRequest(
+      `La contraseña debe tener al menos ${MIN_LONGITUD_PASSWORD} caracteres`,
+    );
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    throw badRequest("La contraseña debe tener al menos una letra y un número");
+  }
+  return password;
+}
+
+const MENSAJE_RECUPERACION =
+  "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.";
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -82,4 +103,21 @@ export async function logout(req: Request, res: Response) {
   const { id_usuario } = (req as AuthenticatedRequest).usuario;
   await invalidarSesiones(id_usuario);
   res.json(ok({ message: "Sesión cerrada" }));
+}
+
+/** HU-004 CA-3: responde siempre lo mismo, para no revelar qué correos están registrados. */
+export async function recuperar(req: Request, res: Response) {
+  const correo = validarCorreo((req.body ?? {}).correo);
+  await solicitarRecuperacion(correo);
+  res.json(ok({ message: MENSAJE_RECUPERACION }));
+}
+
+export async function restablecer(req: Request, res: Response) {
+  const { token, password } = (req.body ?? {}) as Record<string, unknown>;
+  if (!esTokenValido(token)) throw badRequest(MENSAJE_ENLACE_INVALIDO);
+
+  await restablecerPassword(token, validarPasswordNueva(password));
+  res.json(
+    ok({ message: "Tu contraseña se actualizó. Ya puedes iniciar sesión." }),
+  );
 }

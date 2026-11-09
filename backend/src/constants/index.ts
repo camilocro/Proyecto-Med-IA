@@ -59,3 +59,6 @@ export const MAX_CONSULTAS_EXPORTACION = 1000; // tope de filas al exportar CSV/
 export const MAX_MEDICOS_RANKING = 10; // HU-069
 export const DIAS_PERIODO_POR_DEFECTO = 30; // "último mes" en ranking y estadísticas
 export const MAX_BYTES_FOTO_MEDICO = 64 * 1024; // foto ya recortada a 256×256 (HU-060)
+// ─── Enlaces por correo (HU-004, HU-044) ──────────────────────────────────────
+export const HORAS_VIGENCIA_TOKEN_CORREO = 24;
+export const MINUTOS_ENTRE_CORREOS = 2; // evita usar el formulario para llenar el buzón de alguien
