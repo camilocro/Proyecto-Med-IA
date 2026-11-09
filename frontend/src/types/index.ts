@@ -54,6 +54,19 @@ export interface RondaPreguntas {
   preguntas:    PreguntaRespuesta[]
 }
 
+export interface SintomaExtraido {
+  descripcion:       string
+  zona_cuerpo:       string
+  duracion_estimada: string
+}
+
+/** HU-057: otra especialidad que también podría atender el caso */
+export interface EspecialidadAlternativa {
+  id_especialidad: number
+  nombre:          string
+  correspondencia: 'alta' | 'media'
+}
+
 export interface Consulta {
   id_consulta:          number
   descripcion_sintomas: string
@@ -63,6 +76,10 @@ export interface Consulta {
   especialidad_sugerida?: Especialidad
   medicos_sugeridos?:     { medico: Medico }[]
   rondas?:                RondaPreguntas[]
+  sintomas_extraidos?:    SintomaExtraido[]
+  resumen_sintomas?:      string | null                    // HU-055
+  especialidades_alternativas?: EspecialidadAlternativa[] | null // HU-057
+  correoEnviado?:         boolean // solo al completarse (HU-070)
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
