@@ -41,16 +41,33 @@ function usuarioPublico(usuario: {
   };
 }
 
-function signToken(payload: {
+/** El token incluye token_version (tv): al cerrar sesión cambia, y los tokens viejos dejan de valer (HU-003 CA-3). */
+function signToken(usuario: {
   id_usuario: number;
   correo: string;
   rol: string;
+  token_version: number;
 }): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET no definido");
-  return jwt.sign(payload, secret, {
-    expiresIn: JWT_EXPIRES_IN,
-  } as jwt.SignOptions);
+  return jwt.sign(
+    {
+      id_usuario: usuario.id_usuario,
+      correo: usuario.correo,
+      rol: usuario.rol,
+      tv: usuario.token_version,
+    },
+    secret,
+    { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions,
+  );
+}
+
+/** Invalida todos los tokens del usuario: los ya emitidos dejan de pasar el middleware. */
+export async function invalidarSesiones(idUsuario: number): Promise<void> {
+  await prisma.usuario.update({
+    where: { id_usuario: idUsuario },
+    data: { token_version: { increment: 1 } },
+  });
 }
 
 export async function registerUsuario(input: RegisterInput) {
@@ -72,12 +89,7 @@ export async function registerUsuario(input: RegisterInput) {
     },
   });
 
-  const token = signToken({
-    id_usuario: usuario.id_usuario,
-    correo: usuario.correo,
-    rol: usuario.rol,
-  });
-  return { token, usuario: usuarioPublico(usuario) };
+  const token = signToken(usuario);
 }
 
 export async function loginUsuario(input: LoginInput) {
@@ -127,10 +139,6 @@ export async function loginUsuario(input: LoginInput) {
     data: { intentos_fallidos: 0, bloqueado_hasta: null },
   });
 
-  const token = signToken({
-    id_usuario: usuario.id_usuario,
-    correo: usuario.correo,
-    rol: usuario.rol,
-  });
+  const token = signToken(usuario);
   return { token, usuario: usuarioPublico(usuario) };
 }
