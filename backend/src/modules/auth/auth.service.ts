@@ -19,6 +19,7 @@ import {
   MAX_LOGIN_ATTEMPTS,
   LOCKOUT_DURATION_MINUTES,
 } from "../../constants";
+import { iniciarDesafio2FA, verificarDesafio2FA } from "./dobleFactor.service";
 
 interface RegisterInput {
   nombre: string;
@@ -165,6 +166,24 @@ export async function loginUsuario(input: LoginInput) {
       CODIGO_CORREO_NO_VERIFICADO,
     );
   }
+  // HU-046: el médico con verificación en dos pasos recibe un código por correo en lugar del token
+  if (usuario.rol === "medico" && usuario.doble_factor) {
+    return iniciarDesafio2FA(usuario);
+  }
+  const token = signToken(usuario);
+  return { token, usuario: usuarioPublico(usuario) };
+}
+/** HU-046: segundo paso del login. Con el código correcto entrega el token de sesión. */
+export async function completarLogin2FA(desafio: unknown, codigo: unknown) {
+  const idUsuario = await verificarDesafio2FA(desafio, codigo);
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id_usuario: idUsuario },
+  });
+  if (!usuario || !usuario.activo || usuario.eliminado_en) {
+    throw unauthorized("Credenciales inválidas");
+  }
+
   const token = signToken(usuario);
   return { token, usuario: usuarioPublico(usuario) };
 }

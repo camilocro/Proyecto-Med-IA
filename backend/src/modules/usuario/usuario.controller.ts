@@ -12,6 +12,7 @@ import {
   MAX_LONGITUD_NOMBRE,
   MIN_LONGITUD_PASSWORD,
 } from "../../constants";
+import { cambiarDobleFactor } from "../auth/dobleFactor.service";
 
 function validarCambios(body: unknown): CambiosPerfil {
   const { nombre, contrasena, contrasena_actual, recibir_correos } = (body ??
@@ -90,4 +91,18 @@ export async function eliminarMiCuenta(req: Request, res: Response) {
 
   await eliminarCuenta(id_usuario, password, req.ip ?? "desconocida");
   res.json(ok({ message: "Tu cuenta fue eliminada." }));
+}
+/** HU-046: el médico activa o desactiva la verificación en dos pasos (pide la contraseña). */
+export async function cambiarMiDobleFactor(req: Request, res: Response) {
+  const { id_usuario } = (req as AuthenticatedRequest).usuario;
+  const { activar, password } = (req.body ?? {}) as Record<string, unknown>;
+
+  if (typeof activar !== "boolean") {
+    throw badRequest('El campo "activar" debe ser true o false');
+  }
+  if (typeof password !== "string" || !password) {
+    throw badRequest("Ingresa tu contraseña para confirmar");
+  }
+
+  res.json(ok(await cambiarDobleFactor(id_usuario, activar, password)));
 }

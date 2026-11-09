@@ -1,9 +1,18 @@
 import apiClient from "@/lib/apiClient";
 import { AuthResponse, LoginInput, RegisterInput } from "@/types";
 
+/** HU-046: si el médico tiene verificación en dos pasos, el login devuelve un desafío en lugar del token */
+export interface Desafio2FA {
+  requiere2FA: true;
+  desafio: string;
+  correo: string;
+}
+
+export type RespuestaLogin = AuthResponse | Desafio2FA;
+
 export const authService = {
-  async login(credentials: LoginInput): Promise<AuthResponse> {
-    const { data } = await apiClient.post<{ data: AuthResponse }>(
+  async login(credentials: LoginInput): Promise<RespuestaLogin> {
+    const { data } = await apiClient.post<{ data: RespuestaLogin }>(
       "/auth/login",
       credentials,
     );
@@ -52,5 +61,13 @@ export const authService = {
       { correo },
     );
     return data.data.message;
+  },
+
+  async verificar2FA(desafio: string, codigo: string): Promise<AuthResponse> {
+    const { data } = await apiClient.post<{ data: AuthResponse }>("/auth/2fa", {
+      desafio,
+      codigo,
+    });
+    return data.data;
   },
 };

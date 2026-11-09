@@ -12,6 +12,7 @@ const SELECT_PERFIL = {
   verificado: true,
   created_at: true,
   recibir_correos: true,
+  doble_factor: true,
 } as const;
 
 export interface CambiosPerfil {

@@ -12,6 +12,7 @@ export interface PerfilUsuario {
   verificado: boolean;
   created_at: string;
   recibir_correos: boolean;
+  doble_factor: boolean;
 }
 
 export interface ActualizarPerfilInput {
@@ -41,5 +42,16 @@ export const perfilService = {
     return apiClient
       .delete("/usuarios/perfil", { data: { password } })
       .then(() => undefined);
+  },
+
+  cambiarDobleFactor(
+    activar: boolean,
+    password: string,
+  ): Promise<{ doble_factor: boolean; codigosRecuperacion?: string[] }> {
+    return apiClient
+      .patch<
+        ApiResponse<{ doble_factor: boolean; codigosRecuperacion?: string[] }>
+      >("/usuarios/perfil/doble-factor", { activar, password })
+      .then((res) => res.data.data);
   },
 };

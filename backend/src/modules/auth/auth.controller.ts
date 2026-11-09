@@ -3,6 +3,7 @@ import {
   registerUsuario,
   loginUsuario,
   invalidarSesiones,
+  completarLogin2FA,
 } from "./auth.service";
 import { ok, AuthenticatedRequest } from "../../shared/types";
 import { badRequest } from "../../errors/AppError";
@@ -144,4 +145,9 @@ export async function reenviarEnlaceVerificacion(req: Request, res: Response) {
         "Si la cuenta existe y falta verificarla, te enviamos un enlace nuevo.",
     }),
   );
+}
+/** HU-046: segundo paso del login del médico con verificación en dos pasos. */
+export async function verificar2FA(req: Request, res: Response) {
+  const { desafio, codigo } = (req.body ?? {}) as Record<string, unknown>;
+  res.json(ok(await completarLogin2FA(desafio, codigo)));
 }

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import PreferenciasCorreo from "@/components/perfil/PreferenciasCorreo";
 import EliminarCuenta from "@/components/perfil/EliminarCuenta";
+import DobleFactor from "@/components/perfil/DobleFactor";
 
 // Mismas reglas que valida el backend (usuario.controller.ts)
 const MIN_LONGITUD_NOMBRE = 2;
@@ -566,6 +567,16 @@ export default function PerfilPage() {
 
           {/* ── Eliminar mi cuenta (HU-048): solo pacientes ── */}
           {perfil.rol === "paciente" && <EliminarCuenta />}
+
+          {/* ── Verificación en dos pasos (HU-046): solo médicos ── */}
+          {perfil.rol === "medico" && (
+            <DobleFactor
+              activo={perfil.doble_factor}
+              onCambio={(activo) =>
+                setPerfil({ ...perfil, doble_factor: activo })
+              }
+            />
+          )}
         </div>
       </main>
     </>

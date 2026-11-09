@@ -23,6 +23,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
+import Paso2FA from "./Paso2FA";
+import type { Desafio2FA } from "@/services/auth.service";
 
 type TabActiva = "login" | "registro";
 
@@ -214,6 +216,8 @@ export default function AuthForm({
   const [reenvioVerificacion, setReenvioVerificacion] = useState<
     "inactivo" | "enviando" | "enviado"
   >("inactivo");
+  // HU-046: segundo paso del login del médico con verificación en dos pasos
+  const [desafio2FA, setDesafio2FA] = useState<Desafio2FA | null>(null);
 
   // Tras un registro exitoso solo se muestra el inicio de sesión (HU-001 CA-5)
   const [registroExitoso, setRegistroExitoso] = useState(false);
@@ -297,6 +301,13 @@ export default function AuthForm({
       .finally(() => setCargando(false));
 
     if (!resultado) return;
+
+    // HU-046: el médico con verificación en dos pasos ingresa el código que le llegó por correo
+    if ("requiere2FA" in resultado) {
+      setDesafio2FA(resultado);
+      return;
+    }
+
     guardarSesion(resultado.token, resultado.usuario);
     router.push(rutaInicioPorRol(resultado.usuario.rol)); // HU-039: el médico entra a su panel
   }
@@ -356,6 +367,24 @@ export default function AuthForm({
   const tabsVisibles: TabActiva[] = registroExitoso
     ? ["login"]
     : ["login", "registro"];
+
+  // HU-046: segundo paso (después de todos los hooks, por eso va justo antes del render)
+  if (desafio2FA) {
+    return (
+      <Paso2FA
+        desafio={desafio2FA}
+        onVerificado={(r) => {
+          guardarSesion(r.token, r.usuario);
+          router.push(rutaInicioPorRol(r.usuario.rol));
+        }}
+        onVolver={(mensaje) => {
+          setDesafio2FA(null);
+          setPasswordLogin("");
+          setError(mensaje ?? null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">

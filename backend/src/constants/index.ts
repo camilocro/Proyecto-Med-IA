@@ -62,3 +62,7 @@ export const MAX_BYTES_FOTO_MEDICO = 64 * 1024; // foto ya recortada a 256×256 
 // ─── Enlaces por correo (HU-004, HU-044) ──────────────────────────────────────
 export const HORAS_VIGENCIA_TOKEN_CORREO = 24;
 export const MINUTOS_ENTRE_CORREOS = 2; // evita usar el formulario para llenar el buzón de alguien
+// ─── Verificación en dos pasos (HU-046) ───────────────────────────────────────
+export const MINUTOS_VIGENCIA_CODIGO_2FA = 10;
+export const MAX_INTENTOS_2FA = 3;
+export const CANTIDAD_CODIGOS_RECUPERACION = 8;
