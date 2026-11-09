@@ -1,10 +1,14 @@
-'use client'
+"use client";
 
-import React, { useEffect, useState, useCallback } from 'react'
-import { useRouter }   from 'next/navigation'
-import { useAuth }     from '@/hooks/useAuth'
-import { perfilService, PerfilUsuario, ActualizarPerfilInput } from '@/services/perfil.service'
-import Navbar from '@/components/layout/Navbar'
+import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  perfilService,
+  PerfilUsuario,
+  ActualizarPerfilInput,
+} from "@/services/perfil.service";
+import Navbar from "@/components/layout/Navbar";
 import {
   User,
   Mail,
@@ -17,29 +21,44 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-} from 'lucide-react'
+} from "lucide-react";
+import PreferenciasCorreo from "@/components/perfil/PreferenciasCorreo";
 
 // Mismas reglas que valida el backend (usuario.controller.ts)
-const MIN_LONGITUD_NOMBRE   = 2
-const MAX_LONGITUD_NOMBRE   = 100
-const MIN_LONGITUD_PASSWORD = 8
+const MIN_LONGITUD_NOMBRE = 2;
+const MAX_LONGITUD_NOMBRE = 100;
+const MIN_LONGITUD_PASSWORD = 8;
 
 // ── Badge de rol ──────────────────────────────────────────────────────────────
 
 const ROL_CONFIG: Record<string, { label: string; clase: string }> = {
-  administrador: { label: 'Administrador', clase: 'bg-blue-100 text-blue-700 border border-blue-200'  },
-  medico:        { label: 'Médico',        clase: 'bg-green-100 text-green-700 border border-green-200' },
-  paciente:      { label: 'Paciente',      clase: 'bg-gray-100 text-gray-600 border border-gray-200'  },
-}
+  administrador: {
+    label: "Administrador",
+    clase: "bg-blue-100 text-blue-700 border border-blue-200",
+  },
+  medico: {
+    label: "Médico",
+    clase: "bg-green-100 text-green-700 border border-green-200",
+  },
+  paciente: {
+    label: "Paciente",
+    clase: "bg-gray-100 text-gray-600 border border-gray-200",
+  },
+};
 
 function BadgeRol({ rol }: { rol: string }) {
-  const cfg = ROL_CONFIG[rol] ?? { label: rol, clase: 'bg-gray-100 text-gray-600' }
+  const cfg = ROL_CONFIG[rol] ?? {
+    label: rol,
+    clase: "bg-gray-100 text-gray-600",
+  };
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${cfg.clase}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${cfg.clase}`}
+    >
       <Shield className="w-3 h-3" />
       {cfg.label}
     </span>
-  )
+  );
 }
 
 // ── Fila de dato del perfil ───────────────────────────────────────────────────
@@ -49,9 +68,9 @@ function FilaDato({
   etiqueta,
   valor,
 }: {
-  icono: React.ElementType
-  etiqueta: string
-  valor: React.ReactNode
+  icono: React.ElementType;
+  etiqueta: string;
+  valor: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-4 py-4 border-b border-gray-50 last:border-0">
@@ -60,159 +79,203 @@ function FilaDato({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-gray-400 mb-0.5">{etiqueta}</p>
-        <div className="text-sm font-medium text-gray-800 break-words">{valor}</div>
+        <div className="text-sm font-medium text-gray-800 break-words">
+          {valor}
+        </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ── Alerta ────────────────────────────────────────────────────────────────────
 
-type TipoAlerta = 'exito' | 'error'
+type TipoAlerta = "exito" | "error";
 
 function Alerta({ tipo, mensaje }: { tipo: TipoAlerta; mensaje: string }) {
-  const esExito = tipo === 'exito'
+  const esExito = tipo === "exito";
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${
-      esExito ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-    }`}>
-      {esExito
-        ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-        : <AlertCircle  className="w-4 h-4 flex-shrink-0" />
-      }
+    <div
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${
+        esExito ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+      }`}
+    >
+      {esExito ? (
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+      ) : (
+        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+      )}
       {mensaje}
     </div>
-  )
+  );
 }
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function PerfilPage() {
-  const { usuario, cargando: cargandoAuth, estaAutenticado, guardarSesion } = useAuth()
-  const router = useRouter()
+  const {
+    usuario,
+    cargando: cargandoAuth,
+    estaAutenticado,
+    guardarSesion,
+  } = useAuth();
+  const router = useRouter();
 
   // ── Estado del perfil ──────────────────────────────────────────────────────
-  const [perfil,         setPerfil]         = useState<PerfilUsuario | null>(null)
-  const [cargandoPerfil, setCargandoPerfil] = useState(true)
-  const [errorPerfil,    setErrorPerfil]    = useState<string | null>(null)
+  const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
+  const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
 
   // ── Estado del formulario de nombre ───────────────────────────────────────
-  const [nombre,            setNombre]            = useState('')
-  const [guardandoNombre,   setGuardandoNombre]   = useState(false)
-  const [alertaNombre,      setAlertaNombre]      = useState<{ tipo: TipoAlerta; mensaje: string } | null>(null)
+  const [nombre, setNombre] = useState("");
+  const [guardandoNombre, setGuardandoNombre] = useState(false);
+  const [alertaNombre, setAlertaNombre] = useState<{
+    tipo: TipoAlerta;
+    mensaje: string;
+  } | null>(null);
 
   // ── Estado del formulario de contraseña ───────────────────────────────────
-  const [contrasenaActual,    setContrasenaActual]    = useState('')
-  const [contrasenaNueva,     setContrasenaNueva]     = useState('')
-  const [contrasenaConfirm,   setContrasenaConfirm]   = useState('')
-  const [guardandoPassword,   setGuardandoPassword]   = useState(false)
-  const [alertaPassword,      setAlertaPassword]      = useState<{ tipo: TipoAlerta; mensaje: string } | null>(null)
+  const [contrasenaActual, setContrasenaActual] = useState("");
+  const [contrasenaNueva, setContrasenaNueva] = useState("");
+  const [contrasenaConfirm, setContrasenaConfirm] = useState("");
+  const [guardandoPassword, setGuardandoPassword] = useState(false);
+  const [alertaPassword, setAlertaPassword] = useState<{
+    tipo: TipoAlerta;
+    mensaje: string;
+  } | null>(null);
 
   // ── Redirigir si no está autenticado ──────────────────────────────────────
   useEffect(() => {
-    if (!cargandoAuth && !estaAutenticado) router.replace('/login')
-  }, [cargandoAuth, estaAutenticado, router])
+    if (!cargandoAuth && !estaAutenticado) router.replace("/login");
+  }, [cargandoAuth, estaAutenticado, router]);
 
   // ── Cargar perfil desde el backend ────────────────────────────────────────
   const cargarPerfil = useCallback(async () => {
-    setCargandoPerfil(true)
-    setErrorPerfil(null)
+    setCargandoPerfil(true);
+    setErrorPerfil(null);
     try {
-      const datos = await perfilService.getPerfil()
-      setPerfil(datos)
-      setNombre(datos.nombre)
+      const datos = await perfilService.getPerfil();
+      setPerfil(datos);
+      setNombre(datos.nombre);
     } catch {
       // Sin esto la página quedaba cargando indefinidamente si el backend fallaba
-      setErrorPerfil('No se pudo cargar tu perfil. Verificá tu conexión e intentá de nuevo.')
+      setErrorPerfil(
+        "No se pudo cargar tu perfil. Verificá tu conexión e intentá de nuevo.",
+      );
     } finally {
-      setCargandoPerfil(false)
+      setCargandoPerfil(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    if (!cargandoAuth && estaAutenticado) cargarPerfil()
-  }, [cargandoAuth, estaAutenticado, cargarPerfil])
+    if (!cargandoAuth && estaAutenticado) cargarPerfil();
+  }, [cargandoAuth, estaAutenticado, cargarPerfil]);
 
   // ── Guardar nombre ────────────────────────────────────────────────────────
   async function handleGuardarNombre(e: React.FormEvent) {
-    e.preventDefault()
-    setAlertaNombre(null)
+    e.preventDefault();
+    setAlertaNombre(null);
 
-    const limpio = nombre.trim()
-    if (limpio.length < MIN_LONGITUD_NOMBRE || limpio.length > MAX_LONGITUD_NOMBRE) {
+    const limpio = nombre.trim();
+    if (
+      limpio.length < MIN_LONGITUD_NOMBRE ||
+      limpio.length > MAX_LONGITUD_NOMBRE
+    ) {
       setAlertaNombre({
-        tipo:    'error',
+        tipo: "error",
         mensaje: `El nombre debe tener entre ${MIN_LONGITUD_NOMBRE} y ${MAX_LONGITUD_NOMBRE} caracteres.`,
-      })
-      return
+      });
+      return;
     }
     if (limpio === perfil?.nombre) {
-      setAlertaNombre({ tipo: 'error', mensaje: 'El nombre es igual al actual.' })
-      return
+      setAlertaNombre({
+        tipo: "error",
+        mensaje: "El nombre es igual al actual.",
+      });
+      return;
     }
 
-    setGuardandoNombre(true)
+    setGuardandoNombre(true);
     try {
-      const actualizado = await perfilService.actualizarPerfil({ nombre: limpio })
-      setPerfil(actualizado)
-      setNombre(actualizado.nombre)
+      const actualizado = await perfilService.actualizarPerfil({
+        nombre: limpio,
+      });
+      setPerfil(actualizado);
+      setNombre(actualizado.nombre);
       // Actualiza el nombre en el contexto de auth (localStorage)
-      if (usuario) guardarSesion(localStorage.getItem('med_ia_token') ?? '', {
-        ...usuario,
-        nombre: actualizado.nombre,
-      })
-      setAlertaNombre({ tipo: 'exito', mensaje: 'Nombre actualizado correctamente.' })
+      if (usuario)
+        guardarSesion(localStorage.getItem("med_ia_token") ?? "", {
+          ...usuario,
+          nombre: actualizado.nombre,
+        });
+      setAlertaNombre({
+        tipo: "exito",
+        mensaje: "Nombre actualizado correctamente.",
+      });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })
-        ?.response?.data?.message ?? 'Error al actualizar el nombre.'
-      setAlertaNombre({ tipo: 'error', mensaje: msg })
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Error al actualizar el nombre.";
+      setAlertaNombre({ tipo: "error", mensaje: msg });
     } finally {
-      setGuardandoNombre(false)
+      setGuardandoNombre(false);
     }
   }
 
   // ── Cambiar contraseña ────────────────────────────────────────────────────
   async function handleCambiarPassword(e: React.FormEvent) {
-    e.preventDefault()
-    setAlertaPassword(null)
+    e.preventDefault();
+    setAlertaPassword(null);
 
     if (!contrasenaActual) {
-      setAlertaPassword({ tipo: 'error', mensaje: 'Ingresa tu contraseña actual.' })
-      return
+      setAlertaPassword({
+        tipo: "error",
+        mensaje: "Ingresa tu contraseña actual.",
+      });
+      return;
     }
     // El backend exige mínimo 8: con 6 el formulario aceptaba contraseñas que luego eran rechazadas
     if (contrasenaNueva.length < MIN_LONGITUD_PASSWORD) {
       setAlertaPassword({
-        tipo:    'error',
+        tipo: "error",
         mensaje: `La nueva contraseña debe tener al menos ${MIN_LONGITUD_PASSWORD} caracteres.`,
-      })
-      return
+      });
+      return;
     }
     if (!/[A-Za-z]/.test(contrasenaNueva) || !/\d/.test(contrasenaNueva)) {
-      setAlertaPassword({ tipo: 'error', mensaje: 'La contraseña debe tener al menos una letra y un número.' })
-      return
+      setAlertaPassword({
+        tipo: "error",
+        mensaje: "La contraseña debe tener al menos una letra y un número.",
+      });
+      return;
     }
     if (contrasenaNueva !== contrasenaConfirm) {
-      setAlertaPassword({ tipo: 'error', mensaje: 'Las contraseñas no coinciden.' })
-      return
+      setAlertaPassword({
+        tipo: "error",
+        mensaje: "Las contraseñas no coinciden.",
+      });
+      return;
     }
 
-    setGuardandoPassword(true)
+    setGuardandoPassword(true);
     try {
       await perfilService.actualizarPerfil({
-        contrasena:        contrasenaNueva,
+        contrasena: contrasenaNueva,
         contrasena_actual: contrasenaActual,
-      })
-      setContrasenaActual('')
-      setContrasenaNueva('')
-      setContrasenaConfirm('')
-      setAlertaPassword({ tipo: 'exito', mensaje: 'Contraseña actualizada correctamente.' })
+      });
+      setContrasenaActual("");
+      setContrasenaNueva("");
+      setContrasenaConfirm("");
+      setAlertaPassword({
+        tipo: "exito",
+        mensaje: "Contraseña actualizada correctamente.",
+      });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })
-        ?.response?.data?.message ?? 'Error al cambiar la contraseña.'
-      setAlertaPassword({ tipo: 'error', mensaje: msg })
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Error al cambiar la contraseña.";
+      setAlertaPassword({ tipo: "error", mensaje: msg });
     } finally {
-      setGuardandoPassword(false)
+      setGuardandoPassword(false);
     }
   }
 
@@ -225,7 +288,7 @@ export default function PerfilPage() {
           <Loader2 className="w-10 h-10 text-primary animate-spin" />
         </main>
       </>
-    )
+    );
   }
 
   if (errorPerfil || !perfil) {
@@ -234,19 +297,31 @@ export default function PerfilPage() {
         <Navbar />
         <main className="flex-1 bg-gray-50 py-10 px-4">
           <div className="max-w-3xl mx-auto space-y-4">
-            <Alerta tipo="error" mensaje={errorPerfil ?? 'No se pudo cargar tu perfil.'} />
-            <button type="button" onClick={cargarPerfil} className="btn-primary py-2.5 px-6">
+            <Alerta
+              tipo="error"
+              mensaje={errorPerfil ?? "No se pudo cargar tu perfil."}
+            />
+            <button
+              type="button"
+              onClick={cargarPerfil}
+              className="btn-primary py-2.5 px-6"
+            >
               Reintentar
             </button>
           </div>
         </main>
       </>
-    )
+    );
   }
 
-  const fechaRegistro = new Date(perfil.created_at).toLocaleDateString('es-BO', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  })
+  const fechaRegistro = new Date(perfil.created_at).toLocaleDateString(
+    "es-BO",
+    {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    },
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -255,7 +330,6 @@ export default function PerfilPage() {
 
       <main className="flex-1 bg-gray-50 py-10 px-4">
         <div className="max-w-3xl mx-auto space-y-6">
-
           {/* ── Encabezado ── */}
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
@@ -268,13 +342,23 @@ export default function PerfilPage() {
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             {/* Avatar + nombre + rol */}
             <div className="bg-primary px-5 sm:px-8 py-6 sm:py-8 flex items-center gap-4 sm:gap-5">
-              <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
-                              text-white text-2xl font-bold select-none flex-shrink-0">
-                {perfil.nombre.split(' ').slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('')}
+              <div
+                className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
+                              text-white text-2xl font-bold select-none flex-shrink-0"
+              >
+                {perfil.nombre
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((p) => p[0]?.toUpperCase() ?? "")
+                  .join("")}
               </div>
               <div className="min-w-0">
-                <h2 className="text-white text-xl font-bold break-words">{perfil.nombre}</h2>
-                <p className="text-white/70 text-sm mb-2 break-words">{perfil.correo}</p>
+                <h2 className="text-white text-xl font-bold break-words">
+                  {perfil.nombre}
+                </h2>
+                <p className="text-white/70 text-sm mb-2 break-words">
+                  {perfil.correo}
+                </p>
                 <BadgeRol rol={perfil.rol} />
               </div>
             </div>
@@ -305,8 +389,12 @@ export default function PerfilPage() {
                 icono={perfil.verificado ? CheckCircle : XCircle}
                 etiqueta="Cuenta verificada"
                 valor={
-                  <span className={perfil.verificado ? 'text-green-600' : 'text-gray-400'}>
-                    {perfil.verificado ? 'Verificada' : 'Sin verificar'}
+                  <span
+                    className={
+                      perfil.verificado ? "text-green-600" : "text-gray-400"
+                    }
+                  >
+                    {perfil.verificado ? "Verificada" : "Sin verificar"}
                   </span>
                 }
               />
@@ -320,12 +408,20 @@ export default function PerfilPage() {
                 <Pencil className="w-4 h-4 text-blue-600" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-gray-800">Editar nombre</h3>
-                <p className="text-xs text-gray-400">Tu nombre visible en el sistema</p>
+                <h3 className="text-base font-semibold text-gray-800">
+                  Editar nombre
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Tu nombre visible en el sistema
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleGuardarNombre} noValidate className="space-y-4">
+            <form
+              onSubmit={handleGuardarNombre}
+              noValidate
+              className="space-y-4"
+            >
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Nombre completo
@@ -333,7 +429,10 @@ export default function PerfilPage() {
                 <input
                   type="text"
                   value={nombre}
-                  onChange={(e) => { setNombre(e.target.value); setAlertaNombre(null) }}
+                  onChange={(e) => {
+                    setNombre(e.target.value);
+                    setAlertaNombre(null);
+                  }}
                   placeholder="Tu nombre completo"
                   className="input-field"
                   maxLength={100}
@@ -341,7 +440,12 @@ export default function PerfilPage() {
                 />
               </div>
 
-              {alertaNombre && <Alerta tipo={alertaNombre.tipo} mensaje={alertaNombre.mensaje} />}
+              {alertaNombre && (
+                <Alerta
+                  tipo={alertaNombre.tipo}
+                  mensaje={alertaNombre.mensaje}
+                />
+              )}
 
               <div className="flex justify-end">
                 <button
@@ -349,7 +453,9 @@ export default function PerfilPage() {
                   disabled={guardandoNombre}
                   className="btn-primary flex items-center gap-2 py-2.5 px-6"
                 >
-                  {guardandoNombre && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {guardandoNombre && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
                   Guardar nombre
                 </button>
               </div>
@@ -363,12 +469,20 @@ export default function PerfilPage() {
                 <Lock className="w-4 h-4 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-gray-800">Cambiar contraseña</h3>
-                <p className="text-xs text-gray-400">Déjalo vacío si no quieres cambiarla</p>
+                <h3 className="text-base font-semibold text-gray-800">
+                  Cambiar contraseña
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Déjalo vacío si no quieres cambiarla
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleCambiarPassword} noValidate className="space-y-4">
+            <form
+              onSubmit={handleCambiarPassword}
+              noValidate
+              className="space-y-4"
+            >
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contraseña actual
@@ -376,7 +490,10 @@ export default function PerfilPage() {
                 <input
                   type="password"
                   value={contrasenaActual}
-                  onChange={(e) => { setContrasenaActual(e.target.value); setAlertaPassword(null) }}
+                  onChange={(e) => {
+                    setContrasenaActual(e.target.value);
+                    setAlertaPassword(null);
+                  }}
                   placeholder="Tu contraseña actual"
                   className="input-field"
                   autoComplete="current-password"
@@ -390,7 +507,10 @@ export default function PerfilPage() {
                 <input
                   type="password"
                   value={contrasenaNueva}
-                  onChange={(e) => { setContrasenaNueva(e.target.value); setAlertaPassword(null) }}
+                  onChange={(e) => {
+                    setContrasenaNueva(e.target.value);
+                    setAlertaPassword(null);
+                  }}
                   placeholder="Mínimo 8 caracteres, letras y números"
                   className="input-field"
                   autoComplete="new-password"
@@ -404,14 +524,22 @@ export default function PerfilPage() {
                 <input
                   type="password"
                   value={contrasenaConfirm}
-                  onChange={(e) => { setContrasenaConfirm(e.target.value); setAlertaPassword(null) }}
+                  onChange={(e) => {
+                    setContrasenaConfirm(e.target.value);
+                    setAlertaPassword(null);
+                  }}
                   placeholder="Repite la nueva contraseña"
                   className="input-field"
                   autoComplete="new-password"
                 />
               </div>
 
-              {alertaPassword && <Alerta tipo={alertaPassword.tipo} mensaje={alertaPassword.mensaje} />}
+              {alertaPassword && (
+                <Alerta
+                  tipo={alertaPassword.tipo}
+                  mensaje={alertaPassword.mensaje}
+                />
+              )}
 
               <div className="flex justify-end">
                 <button
@@ -419,15 +547,23 @@ export default function PerfilPage() {
                   disabled={guardandoPassword}
                   className="btn-primary flex items-center gap-2 py-2.5 px-6"
                 >
-                  {guardandoPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {guardandoPassword && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
                   Cambiar contraseña
                 </button>
               </div>
             </form>
           </div>
-
+          {/* ── Notificaciones por correo (HU-070 CA-4): solo pacientes ── */}
+          {perfil.rol === "paciente" && (
+            <PreferenciasCorreo
+              recibirCorreos={perfil.recibir_correos}
+              onActualizado={setPerfil}
+            />
+          )}
         </div>
       </main>
     </>
-  )
+  );
 }

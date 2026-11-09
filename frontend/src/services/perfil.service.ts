@@ -1,22 +1,24 @@
-import apiClient from '@/lib/apiClient'
-import { ApiResponse } from '@/types'
+import apiClient from "@/lib/apiClient";
+import { ApiResponse } from "@/types";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export interface PerfilUsuario {
-  id_usuario: number
-  nombre:     string
-  correo:     string
-  rol:        string
-  activo:     boolean
-  verificado: boolean
-  created_at: string
+  id_usuario: number;
+  nombre: string;
+  correo: string;
+  rol: string;
+  activo: boolean;
+  verificado: boolean;
+  created_at: string;
+  recibir_correos: boolean;
 }
 
 export interface ActualizarPerfilInput {
-  nombre?:            string
-  contrasena?:        string
-  contrasena_actual?: string
+  nombre?: string;
+  contrasena?: string;
+  contrasena_actual?: string;
+  recibir_correos?: boolean;
 }
 
 // ── Servicio ──────────────────────────────────────────────────────────────────
@@ -24,13 +26,13 @@ export interface ActualizarPerfilInput {
 export const perfilService = {
   getPerfil(): Promise<PerfilUsuario> {
     return apiClient
-      .get<ApiResponse<PerfilUsuario>>('/usuarios/perfil')
-      .then((res: { data: ApiResponse<PerfilUsuario> }) => res.data.data)
+      .get<ApiResponse<PerfilUsuario>>("/usuarios/perfil")
+      .then((res: { data: ApiResponse<PerfilUsuario> }) => res.data.data);
   },
 
   actualizarPerfil(cambios: ActualizarPerfilInput): Promise<PerfilUsuario> {
     return apiClient
-      .patch<ApiResponse<PerfilUsuario>>('/usuarios/perfil', cambios)
-      .then((res: { data: ApiResponse<PerfilUsuario> }) => res.data.data)
+      .patch<ApiResponse<PerfilUsuario>>("/usuarios/perfil", cambios)
+      .then((res: { data: ApiResponse<PerfilUsuario> }) => res.data.data);
   },
-}
+};

@@ -13,10 +13,8 @@ import {
 } from "../../constants";
 
 function validarCambios(body: unknown): CambiosPerfil {
-  const { nombre, contrasena, contrasena_actual } = (body ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const { nombre, contrasena, contrasena_actual, recibir_correos } = (body ??
+    {}) as Record<string, unknown>;
   const cambios: CambiosPerfil = {};
 
   if (nombre !== undefined) {
@@ -52,9 +50,20 @@ function validarCambios(body: unknown): CambiosPerfil {
       typeof contrasena_actual === "string" ? contrasena_actual : undefined;
   }
 
-  if (cambios.nombre === undefined && cambios.contrasena === undefined) {
+  if (recibir_correos !== undefined) {
+    if (typeof recibir_correos !== "boolean") {
+      throw badRequest('El campo "recibir_correos" debe ser true o false');
+    }
+    cambios.recibirCorreos = recibir_correos;
+  }
+
+  if (
+    cambios.nombre === undefined &&
+    cambios.contrasena === undefined &&
+    cambios.recibirCorreos === undefined
+  ) {
     throw badRequest(
-      "Envía al menos un campo para actualizar: nombre o contrasena",
+      "Envía al menos un campo para actualizar: nombre, contrasena o recibir_correos",
     );
   }
   return cambios;

@@ -11,12 +11,14 @@ const SELECT_PERFIL = {
   activo: true,
   verificado: true,
   created_at: true,
+  recibir_correos: true,
 } as const;
 
 export interface CambiosPerfil {
   nombre?: string;
   contrasena?: string;
   contrasenaActual?: string;
+  recibirCorreos?: boolean;
 }
 
 export async function obtenerPerfil(idUsuario: number) {
@@ -37,9 +39,15 @@ export async function actualizarPerfil(
   });
   if (!usuario) throw notFound("Usuario");
 
-  const datos: { nombre?: string; password_hash?: string } = {};
+  const datos: {
+    nombre?: string;
+    password_hash?: string;
+    recibir_correos?: boolean;
+  } = {};
 
   if (cambios.nombre !== undefined) datos.nombre = cambios.nombre;
+  if (cambios.recibirCorreos !== undefined)
+    datos.recibir_correos = cambios.recibirCorreos;
 
   if (cambios.contrasena !== undefined) {
     // Para cambiar la contraseña hay que confirmar la actual (HU-043 CA-1)
