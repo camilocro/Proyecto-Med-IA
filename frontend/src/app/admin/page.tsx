@@ -34,6 +34,7 @@ import {
   BadgeUrgencia,
   formatearFechaCorta,
 } from "@/components/admin/BadgesConsulta";
+import AccesosPanel from "@/components/admin/AccesosPanel";
 
 // ── Subtextos de las tarjetas (HU-032) ───────────────────────────────────────
 
@@ -80,6 +81,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "medicos", label: "Médicos" },
   { id: "especialidades", label: "Especialidades" },
   { id: "consultas", label: "Consultas" },
+  { id: "accesos", label: "Accesos" },
   { id: "configuracion", label: "Configuración" },
 ];
 
@@ -517,6 +519,9 @@ export default function AdminPage() {
 
           {/* ══ TAB CONSULTAS (HU-031, HU-068) ═════════════════════════════ */}
           {tabActiva === "consultas" && <ConsultasPanel />}
+
+          {/* ══ TAB ACCESOS (HU-047) ═══════════════════════════════════════ */}
+          {tabActiva === "accesos" && <AccesosPanel />}
 
           {/* ══ TAB CONFIGURACIÓN (HU-067) ═════════════════════════════════ */}
           {tabActiva === "configuracion" && <ConfiguracionPanel />}

@@ -66,3 +66,7 @@ export const MINUTOS_ENTRE_CORREOS = 2; // evita usar el formulario para llenar 
 export const MINUTOS_VIGENCIA_CODIGO_2FA = 10;
 export const MAX_INTENTOS_2FA = 3;
 export const CANTIDAD_CODIGOS_RECUPERACION = 8;
+// ─── Registro de accesos (HU-047) ─────────────────────────────────────────────
+export const MAX_ACCESOS_POR_PAGINA = 25;
+export const MAX_ACCESOS_EXPORTACION = 2000; // tope de filas al exportar CSV
+export const MAX_ACCESOS_DETALLE_IP = 20; // últimos accesos que muestra el detalle de una IP

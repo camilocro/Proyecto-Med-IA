@@ -23,6 +23,7 @@ import {
   reenviarVerificacion,
   MENSAJE_VERIFICACION_INVALIDA,
 } from "./verificacion.service";
+import { registrarIntentoLogin } from "./intentos.service";
 
 // ─── Validaciones de entrada (HU-001 CA-3/CA-4, HU-033) ──────────────────────
 // Sin estas validaciones, un body incompleto llegaba a Prisma y respondía 500.
@@ -99,9 +100,27 @@ export async function register(req: Request, res: Response) {
   res.status(201).json(ok(resultado));
 }
 
+/** HU-047: cada intento queda registrado con su IP y su resultado. */
 export async function login(req: Request, res: Response) {
-  const resultado = await loginUsuario(validarLogin(req.body));
-  res.json(ok(resultado));
+  const datos = validarLogin(req.body);
+  const ip = req.ip ?? "desconocida";
+
+  try {
+    const resultado = await loginUsuario(datos);
+    // Con verificación en dos pasos, el acceso se completa (y se registra) en /auth/2fa
+    if (!("requiere2FA" in resultado)) {
+      await registrarIntentoLogin({
+        correo: datos.correo,
+        ip,
+        exitoso: true,
+        idUsuario: resultado.usuario.id_usuario,
+      });
+    }
+    res.json(ok(resultado));
+  } catch (error) {
+    await registrarIntentoLogin({ correo: datos.correo, ip, exitoso: false });
+    throw error;
+  }
 }
 
 /** HU-003 CA-3: el token usado deja de servir, aunque alguien lo haya copiado. */
@@ -149,5 +168,14 @@ export async function reenviarEnlaceVerificacion(req: Request, res: Response) {
 /** HU-046: segundo paso del login del médico con verificación en dos pasos. */
 export async function verificar2FA(req: Request, res: Response) {
   const { desafio, codigo } = (req.body ?? {}) as Record<string, unknown>;
-  res.json(ok(await completarLogin2FA(desafio, codigo)));
+  const resultado = await completarLogin2FA(desafio, codigo);
+
+  // HU-047: el acceso del médico con 2FA se registra recién al completar el segundo paso
+  await registrarIntentoLogin({
+    correo: resultado.usuario.correo,
+    ip: req.ip ?? "desconocida",
+    exitoso: true,
+    idUsuario: resultado.usuario.id_usuario,
+  });
+  res.json(ok(resultado));
 }

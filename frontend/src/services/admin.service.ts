@@ -134,6 +134,44 @@ export interface ConfiguracionSistema {
   valor: string;
   updated_at: string;
 }
+// ── Registro de accesos (HU-047) ──────────────────────────────────────────────
+
+export interface AccesoAdmin {
+  id: number;
+  correo_intentado: string;
+  ip_address: string;
+  exitoso: boolean;
+  fecha: string;
+  usuario: { nombre: string; rol: string } | null;
+}
+
+export interface PaginaAccesos {
+  accesos: AccesoAdmin[];
+  total: number;
+  pagina: number;
+  porPagina: number;
+}
+
+export interface FiltrosAccesos {
+  usuario?: string;
+  ip?: string;
+  desde?: string;
+  hasta?: string;
+  resultado?: "" | "exitoso" | "fallido";
+  pagina?: number;
+  porPagina?: number;
+}
+
+export interface DetalleIp {
+  ip: string;
+  total: number;
+  exitosos: number;
+  fallidos: number;
+  primero: string | null;
+  ultimo: string | null;
+  correos: string[];
+  recientes: AccesoAdmin[];
+}
 
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
@@ -176,9 +214,12 @@ export const adminService = {
     fechas: { desde?: string; hasta?: string } = {},
   ): Promise<HistorialUsuarioAdmin> {
     return apiClient
-      .get<ApiResponse<HistorialUsuarioAdmin>>(`/admin/usuarios/${id}/consultas`, {
-        params: paramsSinVacios(fechas),
-      })
+      .get<ApiResponse<HistorialUsuarioAdmin>>(
+        `/admin/usuarios/${id}/consultas`,
+        {
+          params: paramsSinVacios(fechas),
+        },
+      )
       .then((res) => res.data.data);
   },
 
@@ -220,6 +261,22 @@ export const adminService = {
       .patch<
         ApiResponse<ConfiguracionSistema>
       >("/admin/configuracion", { clave, valor })
+      .then((res) => res.data.data);
+  },
+
+  listarAccesos(filtros: FiltrosAccesos): Promise<PaginaAccesos> {
+    return apiClient
+      .get<ApiResponse<PaginaAccesos>>("/admin/accesos", {
+        params: paramsSinVacios({ ...filtros }),
+      })
+      .then((res) => res.data.data);
+  },
+
+  getDetalleIp(ip: string): Promise<DetalleIp> {
+    return apiClient
+      .get<
+        ApiResponse<DetalleIp>
+      >(`/admin/accesos/ip/${encodeURIComponent(ip)}`)
       .then((res) => res.data.data);
   },
 };

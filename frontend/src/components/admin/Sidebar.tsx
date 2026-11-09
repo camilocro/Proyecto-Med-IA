@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   LucideIcon,
+  ShieldCheck,
 } from "lucide-react";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ export type SeccionAdmin =
   | "medicos"
   | "especialidades"
   | "consultas"
+  | "accesos"
   | "configuracion";
 
 interface EnlaceSidebar {
@@ -40,6 +42,7 @@ const ENLACES: EnlaceSidebar[] = [
   { label: "Especialidades", Icono: BookOpen, seccion: "especialidades" },
   { label: "Consultas", Icono: ClipboardList, seccion: "consultas" },
   { label: "Configuración", Icono: Settings, seccion: "configuracion" },
+  { label: "Accesos", Icono: ShieldCheck, seccion: "accesos" },
 ];
 
 // ── Subcomponente Avatar ──────────────────────────────────────────────────────
