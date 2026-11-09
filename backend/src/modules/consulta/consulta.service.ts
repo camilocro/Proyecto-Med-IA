@@ -1,28 +1,14 @@
-import { Prisma, NivelUrgencia, TipoDerivacion } from "@prisma/client";
+import { Prisma, EstadoConsulta } from "@prisma/client";
 import prisma from "../../config/prisma";
+import { badRequest, conflict, notFound } from "../../errors/AppError";
+import { getTodayRange } from "../../shared/fechas";
+import { notificarConsultaCompletada } from "../notificacion/notificacion.service";
 import {
-  AppError,
-  badRequest,
-  conflict,
-  notFound,
-} from "../../errors/AppError";
-import {
-  MAX_TRIAGE_ROUNDS,
-  MAX_MEDICOS_SUGERIDOS,
-  ESPECIALIDAD_POR_DEFECTO,
-  URGENCIA_CASO_COMPLEJO,
-  MOTIVO_CASO_COMPLEJO,
-  MAX_CONSULTAS_HISTORIAL_IA,
-} from "../../constants";
-import { getTodayRange, formatearFechaLocal } from "../../shared/fechas";
-import {
-  analizarSintomas,
-  ErrorIA,
-  EntradaAnalisis,
-  ConsultaPrevia,
-  ResultadoAnalisisIA,
-  RondaRespondida,
-} from "./ia.service";
+  analizarConversacion,
+  aplicarAnalisis,
+  borrarRondasDesde,
+  conversacionDe,
+} from "./triage.service";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -40,16 +26,6 @@ export interface Solicitante {
 export interface RespuestaRonda {
   id_pr: number;
   respuesta: string;
-}
-
-type EspecialidadCatalogo = { id_especialidad: number; nombre: string };
-type SintomaIA = ResultadoAnalisisIA["sintomas"][number];
-
-interface DatosVeredicto {
-  especialidad: EspecialidadCatalogo;
-  nivelUrgencia: NivelUrgencia;
-  motivo: string;
-  sintomas: SintomaIA[];
 }
 
 const INCLUDE_CONSULTA_COMPLETA = {
@@ -72,6 +48,19 @@ const INCLUDE_CONSULTA_COMPLETA = {
     },
   },
 } satisfies Prisma.ConsultaInclude;
+
+const INCLUDE_RONDAS = {
+  rondas: {
+    orderBy: { numero_ronda: "asc" },
+    include: { preguntas: { orderBy: { orden: "asc" } } },
+  },
+} satisfies Prisma.ConsultaInclude;
+
+// HU-052: se puede reiniciar mientras la consulta no terminó
+const ESTADOS_REINICIABLES: EstadoConsulta[] = [
+  "esperando_respuestas",
+  "esperando_confirmacion",
+];
 
 // ─── Funciones públicas del módulo ────────────────────────────────────────────
 
@@ -101,11 +90,16 @@ export async function crearConsulta(
     },
   });
 
+  let completada: boolean;
   try {
-    await procesarAnalisis(consulta.id_consulta);
+    const analisis = await analizarConversacion(
+      consulta,
+      conversacionDe(descripcionSintomas, []),
+    );
+    completada = await aplicarAnalisis(consulta.id_consulta, 0, analisis);
   } catch (error) {
-    // Si el análisis falla, la consulta se borra: no consume el límite ni aparece en el historial.
-    // Es seguro porque las rondas y los síntomas se guardan recién cuando la IA responde.
+    // Si el análisis falla (o el idioma no se admite), la consulta se borra:
+    // no consume el límite ni aparece en el historial.
     await prisma.consulta.deleteMany({
       where: { id_consulta: consulta.id_consulta },
     });
@@ -116,7 +110,7 @@ export async function crearConsulta(
     await registrarConsultaAnonima(contexto.sesionAnonimo, contexto.ip);
   }
 
-  return cargarConsultaCompleta(consulta.id_consulta);
+  return resultadoConsulta(consulta.id_consulta, completada);
 }
 
 export async function obtenerConsulta(
@@ -135,23 +129,12 @@ export async function guardarRespuestas(
   respuestas: RespuestaRonda[],
   solicitante: Solicitante,
 ) {
-  const consulta = await prisma.consulta.findUnique({
-    where: { id_consulta: idConsulta },
-    include: {
-      rondas: {
-        orderBy: { numero_ronda: "desc" },
-        take: 1,
-        include: { preguntas: true },
-      },
-    },
-  });
-  if (!consulta || !puedeAcceder(consulta, solicitante))
-    throw notFound("Consulta");
+  const consulta = await cargarConsultaPropia(idConsulta, solicitante);
   if (consulta.estado !== "esperando_respuestas") {
     throw conflict("Esta consulta no está esperando respuestas");
   }
 
-  const rondaActual = consulta.rondas[0];
+  const rondaActual = consulta.rondas[consulta.rondas.length - 1];
   if (!rondaActual || rondaActual.id_ronda !== idRonda) {
     throw conflict("Solo puedes responder la ronda de preguntas actual");
   }
@@ -169,14 +152,11 @@ export async function guardarRespuestas(
     );
   }
 
-  // Bloqueo: si llegan dos envíos a la vez, solo el primero cambia el estado
-  const { count } = await prisma.consulta.updateMany({
-    where: { id_consulta: idConsulta, estado: "esperando_respuestas" },
-    data: { estado: "en_proceso" },
-  });
-  if (count === 0) throw conflict("Esta ronda ya se está procesando");
+  await bloquear(idConsulta, "esperando_respuestas");
 
+  let completada: boolean;
   try {
+    // Las respuestas se guardan antes de analizar: si la IA falla, el paciente puede reintentar
     await prisma.$transaction(
       respuestas.map((r) =>
         prisma.preguntaRespuesta.update({
@@ -185,17 +165,132 @@ export async function guardarRespuestas(
         }),
       ),
     );
-    await procesarAnalisis(idConsulta);
+    const respondidas = new Map(respuestas.map((r) => [r.id_pr, r.respuesta]));
+    const rondas = consulta.rondas.map((r) => ({
+      ...r,
+      preguntas: r.preguntas.map((p) => ({
+        ...p,
+        respuesta: respondidas.get(p.id_pr) ?? p.respuesta,
+      })),
+    }));
+    const analisis = await analizarConversacion(
+      consulta,
+      conversacionDe(consulta.descripcion_sintomas, rondas),
+    );
+    completada = await aplicarAnalisis(idConsulta, rondas.length, analisis);
   } catch (error) {
-    // Las respuestas quedan guardadas: el paciente puede reintentar el envío
-    await prisma.consulta.update({
-      where: { id_consulta: idConsulta },
-      data: { estado: "esperando_respuestas" },
-    });
+    await desbloquear(idConsulta, "esperando_respuestas");
     throw error;
   }
 
-  return cargarConsultaCompleta(idConsulta);
+  return resultadoConsulta(idConsulta, completada);
+}
+
+/**
+ * HU-053: corregir una respuesta antes de confirmar. Se vuelve a analizar desde
+ * esa ronda (las siguientes se descartan) sin gastar otra consulta.
+ */
+export async function corregirRespuesta(
+  idConsulta: number,
+  idPr: number,
+  respuesta: string,
+  solicitante: Solicitante,
+) {
+  const consulta = await cargarConsultaPropia(idConsulta, solicitante);
+  if (consulta.estado !== "esperando_confirmacion") {
+    throw conflict("Solo puedes corregir respuestas antes de confirmar la consulta");
+  }
+
+  const ronda = consulta.rondas.find((r) =>
+    r.preguntas.some((p) => p.id_pr === idPr),
+  );
+  if (!ronda) throw notFound("Pregunta");
+
+  const rondas = consulta.rondas
+    .filter((r) => r.numero_ronda <= ronda.numero_ronda)
+    .map((r) => ({
+      ...r,
+      preguntas: r.preguntas.map((p) =>
+        p.id_pr === idPr ? { ...p, respuesta } : p,
+      ),
+    }));
+
+  await bloquear(idConsulta, "esperando_confirmacion");
+
+  let completada: boolean;
+  try {
+    const analisis = await analizarConversacion(
+      consulta,
+      conversacionDe(consulta.descripcion_sintomas, rondas),
+    );
+    completada = await aplicarAnalisis(idConsulta, rondas.length, analisis, [
+      prisma.preguntaRespuesta.update({
+        where: { id_pr: idPr },
+        data: { respuesta },
+      }),
+      ...borrarRondasDesde(idConsulta, ronda.numero_ronda + 1),
+    ]);
+  } catch (error) {
+    // Nada se guardó todavía: la consulta vuelve a esperar la confirmación
+    await desbloquear(idConsulta, "esperando_confirmacion");
+    throw error;
+  }
+
+  return resultadoConsulta(idConsulta, completada);
+}
+
+/**
+ * HU-052: empieza de nuevo con otra descripción sobre la MISMA consulta,
+ * así no se descuenta otra del límite diario (CA-2).
+ */
+export async function reiniciarConsulta(
+  idConsulta: number,
+  descripcionSintomas: string,
+  solicitante: Solicitante,
+) {
+  const consulta = await cargarConsultaPropia(idConsulta, solicitante);
+  const estadoAnterior = consulta.estado;
+  if (!ESTADOS_REINICIABLES.includes(estadoAnterior)) {
+    throw conflict("Solo puedes reiniciar una consulta que todavía no terminó");
+  }
+
+  await bloquear(idConsulta, estadoAnterior);
+
+  let completada: boolean;
+  try {
+    const analisis = await analizarConversacion(
+      consulta,
+      conversacionDe(descripcionSintomas, []),
+    );
+    completada = await aplicarAnalisis(idConsulta, 0, analisis, [
+      prisma.consulta.update({
+        where: { id_consulta: idConsulta },
+        data: { descripcion_sintomas: descripcionSintomas },
+      }),
+      ...borrarRondasDesde(idConsulta, 1),
+    ]);
+  } catch (error) {
+    await desbloquear(idConsulta, estadoAnterior);
+    throw error;
+  }
+
+  return resultadoConsulta(idConsulta, completada);
+}
+
+/** HU-053: el paciente confirma el resumen y recién ahí ve el resultado */
+export async function confirmarConsulta(
+  idConsulta: number,
+  solicitante: Solicitante,
+) {
+  await cargarConsultaPropia(idConsulta, solicitante);
+
+  const { count } = await prisma.consulta.updateMany({
+    where: { id_consulta: idConsulta, estado: "esperando_confirmacion" },
+    data: { estado: "completada" },
+  });
+  if (count === 0) throw conflict("Esta consulta no está esperando confirmación");
+
+  return resultadoConsulta(idConsulta, true);
 }
 
 export async function cancelarConsulta(
@@ -217,6 +312,30 @@ export async function cancelarConsulta(
   });
 }
 
+/**
+ * HU-065: el paciente la quita de su historial. No se borra de verdad:
+ * sigue contando para el límite diario (CA-2) y el administrador la conserva.
+ */
+export async function ocultarConsulta(idConsulta: number, idUsuario: number) {
+  const idPaciente = await getIdPacientePorUsuario(idUsuario);
+  const consulta = await prisma.consulta.findUnique({
+    where: { id_consulta: idConsulta },
+  });
+  if (
+    !consulta ||
+    idPaciente === undefined ||
+    consulta.id_paciente !== idPaciente ||
+    consulta.oculta_paciente
+  ) {
+    throw notFound("Consulta");
+  }
+
+  await prisma.consulta.update({
+    where: { id_consulta: idConsulta },
+    data: { oculta_paciente: true },
+  });
+}
+
 export async function obtenerHistorialPaciente(idUsuario: number) {
   const paciente = await prisma.paciente.findUnique({
     where: { id_usuario: idUsuario },
@@ -224,7 +343,7 @@ export async function obtenerHistorialPaciente(idUsuario: number) {
   if (!paciente) return [];
 
   return prisma.consulta.findMany({
-    where: { id_paciente: paciente.id_paciente },
+    where: { id_paciente: paciente.id_paciente, oculta_paciente: false }, // HU-065 CA-4
     orderBy: { fecha_consulta: "desc" },
     include: {
       especialidad_sugerida: true,
@@ -248,207 +367,57 @@ async function cargarConsultaCompleta(idConsulta: number) {
   return consulta;
 }
 
+/** La consulta con sus rondas, solo si pertenece a quien la pide */
+async function cargarConsultaPropia(idConsulta: number, solicitante: Solicitante) {
+  const consulta = await prisma.consulta.findUnique({
+    where: { id_consulta: idConsulta },
+    include: INCLUDE_RONDAS,
+  });
+  if (!consulta || !puedeAcceder(consulta, solicitante))
+    throw notFound("Consulta");
+  return consulta;
+}
+
+/**
+ * Lo que responden los endpoints del triage. Si la consulta acaba de completarse,
+ * se avisa por correo al paciente (HU-070) y se informa si se pudo enviar.
+ */
+async function resultadoConsulta(idConsulta: number, recienCompletada: boolean) {
+  const correoEnviado = recienCompletada
+    ? await notificarConsultaCompletada(idConsulta)
+    : undefined;
+  return { ...(await cargarConsultaCompleta(idConsulta)), correoEnviado };
+}
+
 /** Solo el dueño de la consulta (paciente o misma sesión anónima) puede acceder a ella. */
 function puedeAcceder(
-  consulta: { id_paciente: number | null; sesion_anonimo: string | null },
+  consulta: {
+    id_paciente: number | null;
+    sesion_anonimo: string | null;
+    oculta_paciente: boolean;
+  },
   solicitante: Solicitante,
 ): boolean {
+  if (consulta.oculta_paciente) return false; // HU-065: para el paciente ya no existe
   if (consulta.id_paciente !== null)
     return consulta.id_paciente === solicitante.idPaciente;
   return consulta.sesion_anonimo === solicitante.sesionAnonimo;
 }
 
-// ─── Núcleo del triage ────────────────────────────────────────────────────────
+/** Si llegan dos envíos a la vez, solo el primero cambia el estado */
+async function bloquear(idConsulta: number, estadoEsperado: EstadoConsulta) {
+  const { count } = await prisma.consulta.updateMany({
+    where: { id_consulta: idConsulta, estado: estadoEsperado },
+    data: { estado: "en_proceso" },
+  });
+  if (count === 0) throw conflict("Esta consulta ya se está procesando");
+}
 
-/** Envía la conversación acumulada a la IA y aplica el resultado. Se reutiliza en cada ronda. */
-async function procesarAnalisis(idConsulta: number): Promise<void> {
-  const consulta = await prisma.consulta.findUnique({
+async function desbloquear(idConsulta: number, estado: EstadoConsulta) {
+  await prisma.consulta.update({
     where: { id_consulta: idConsulta },
-    include: {
-      rondas: {
-        orderBy: { numero_ronda: "asc" },
-        include: { preguntas: { orderBy: { orden: "asc" } } },
-      },
-    },
+    data: { estado },
   });
-  if (!consulta) throw notFound("Consulta");
-
-  const [especialidades, historial] = await Promise.all([
-    prisma.especialidad.findMany({
-      where: { activo: true },
-      select: { id_especialidad: true, nombre: true },
-    }),
-    // HU-014 / HU-056: los anónimos no tienen historial
-    consulta.id_paciente
-      ? obtenerHistorialParaIA(consulta.id_paciente, idConsulta)
-      : Promise.resolve([]),
-  ]);
-
-  const rondas: RondaRespondida[] = consulta.rondas.map((r) => ({
-    numero: r.numero_ronda,
-    preguntas: r.preguntas.map((p) => ({
-      pregunta: p.pregunta,
-      respuesta: p.respuesta,
-    })),
-  }));
-
-  const resultado = await analizarConManejoDeErrores({
-    descripcion: consulta.descripcion_sintomas,
-    rondas,
-    especialidades: especialidades.map((e) => e.nombre),
-    historial,
-  });
-
-  if (resultado.suficienteInformacion) {
-    await finalizarConsulta(idConsulta, {
-      especialidad: buscarEspecialidad(resultado.especialidad, especialidades),
-      nivelUrgencia: resultado.nivelUrgencia,
-      motivo: resultado.motivoDerivacion,
-      sintomas: resultado.sintomas,
-    });
-    return;
-  }
-
-  // RN-002: síntomas contradictorios o demasiadas rondas sin resolver
-  const limiteRondasAlcanzado = consulta.rondas.length >= MAX_TRIAGE_ROUNDS;
-  if (resultado.casoComplejo || limiteRondasAlcanzado) {
-    await finalizarConsulta(idConsulta, {
-      especialidad: obtenerEspecialidadPorDefecto(especialidades),
-      nivelUrgencia: URGENCIA_CASO_COMPLEJO,
-      motivo: MOTIVO_CASO_COMPLEJO,
-      sintomas: resultado.sintomas,
-    });
-    return;
-  }
-
-  await crearRonda(
-    idConsulta,
-    consulta.rondas.length + 1,
-    resultado.preguntasSeguimiento,
-  );
-}
-
-/** Últimas consultas completadas del paciente, resumidas para la IA (sin la consulta actual). */
-async function obtenerHistorialParaIA(
-  idPaciente: number,
-  idConsultaActual: number,
-): Promise<ConsultaPrevia[]> {
-  const anteriores = await prisma.consulta.findMany({
-    where: {
-      id_paciente: idPaciente,
-      estado: "completada",
-      id_consulta: { not: idConsultaActual },
-    },
-    orderBy: { fecha_consulta: "desc" },
-    take: MAX_CONSULTAS_HISTORIAL_IA,
-    select: {
-      fecha_consulta: true,
-      nivel_urgencia: true,
-      especialidad_sugerida: { select: { nombre: true } },
-    },
-  });
-
-  return anteriores.map((c) => ({
-    fecha: formatearFechaLocal(c.fecha_consulta),
-    especialidad: c.especialidad_sugerida?.nombre ?? "sin especialidad",
-    nivelUrgencia: c.nivel_urgencia ?? "no indicada",
-  }));
-}
-
-async function analizarConManejoDeErrores(
-  entrada: EntradaAnalisis,
-): Promise<ResultadoAnalisisIA> {
-  try {
-    return await analizarSintomas(entrada);
-  } catch (error) {
-    if (!(error instanceof ErrorIA)) throw error;
-
-    console.error(`[IA] ${error.tipo}: ${error.message}`);
-    if (error.tipo === "respuesta_invalida") {
-      throw new AppError(
-        "No pudimos interpretar el análisis de tus síntomas. Intenta de nuevo.",
-        502,
-      );
-    }
-    throw new AppError(
-      "El análisis de síntomas no está disponible en este momento. Intenta de nuevo en unos minutos.",
-      503,
-    );
-  }
-}
-
-async function finalizarConsulta(
-  idConsulta: number,
-  datos: DatosVeredicto,
-): Promise<void> {
-  const medicos = await buscarMedicosDisponibles(
-    datos.especialidad.id_especialidad,
-  );
-
-  await prisma.$transaction([
-    prisma.sintomaExtraido.deleteMany({ where: { id_consulta: idConsulta } }),
-    prisma.sintomaExtraido.createMany({
-      data: datos.sintomas.map((s) => ({ id_consulta: idConsulta, ...s })),
-    }),
-    prisma.medicoSugerido.deleteMany({ where: { id_consulta: idConsulta } }),
-    prisma.medicoSugerido.createMany({
-      data: medicos.map((m, i) => ({
-        id_consulta: idConsulta,
-        id_medico: m.id_medico,
-        orden_sugerencia: i + 1,
-      })),
-    }),
-    prisma.consulta.update({
-      where: { id_consulta: idConsulta },
-      data: {
-        id_especialidad_sugerida: datos.especialidad.id_especialidad,
-        nivel_urgencia: datos.nivelUrgencia,
-        tipo_derivacion: calcularTipoDerivacion(
-          datos.nivelUrgencia,
-          datos.especialidad,
-        ),
-        motivo_derivacion: datos.motivo,
-        estado: "completada",
-      },
-    }),
-  ]);
-}
-
-/** RN-005 / HU-017: solo médicos de la especialidad, disponibles y con cuenta y centro activos. */
-async function buscarMedicosDisponibles(idEspecialidad: number) {
-  return prisma.medico.findMany({
-    where: {
-      id_especialidad: idEspecialidad,
-      disponible: true,
-      usuario: { activo: true },
-      centro_salud: { activo: true },
-    },
-    orderBy: { created_at: "asc" },
-    take: MAX_MEDICOS_SUGERIDOS,
-    select: { id_medico: true },
-  });
-}
-
-async function crearRonda(
-  idConsulta: number,
-  numeroRonda: number,
-  preguntas: string[],
-): Promise<void> {
-  await prisma.$transaction([
-    prisma.rondaPreguntas.create({
-      data: {
-        id_consulta: idConsulta,
-        numero_ronda: numeroRonda,
-        preguntas: {
-          create: preguntas.map((pregunta, i) => ({ pregunta, orden: i + 1 })),
-        },
-      },
-    }),
-    prisma.consulta.update({
-      where: { id_consulta: idConsulta },
-      data: { estado: "esperando_respuestas" },
-    }),
-  ]);
 }
 
 async function registrarConsultaAnonima(
@@ -461,56 +430,4 @@ async function registrarConsultaAnonima(
     create: { sesion_id: sesionId, ip_address: ip, fecha: start, cantidad: 1 },
     update: { cantidad: { increment: 1 } },
   });
-}
-
-// ─── Reglas de negocio auxiliares ─────────────────────────────────────────────
-
-const normalizar = (texto: string) =>
-  texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-
-/** La IA devuelve un nombre: se valida contra el catálogo real de la BD. */
-function buscarEspecialidad(
-  nombre: string,
-  catalogo: EspecialidadCatalogo[],
-): EspecialidadCatalogo {
-  const encontrada = catalogo.find(
-    (e) => normalizar(e.nombre) === normalizar(nombre),
-  );
-  if (encontrada) return encontrada;
-
-  console.warn(
-    `[Triage] Especialidad fuera del catálogo: "${nombre}". Se usa ${ESPECIALIDAD_POR_DEFECTO}.`,
-  );
-  return obtenerEspecialidadPorDefecto(catalogo);
-}
-
-function obtenerEspecialidadPorDefecto(
-  catalogo: EspecialidadCatalogo[],
-): EspecialidadCatalogo {
-  const porDefecto = catalogo.find(
-    (e) => normalizar(e.nombre) === normalizar(ESPECIALIDAD_POR_DEFECTO),
-  );
-  if (!porDefecto) {
-    throw new AppError(
-      `Falta la especialidad "${ESPECIALIDAD_POR_DEFECTO}" en el catálogo`,
-      500,
-    );
-  }
-  return porDefecto;
-}
-
-/** El tipo de derivación es lógica de negocio: lo decide el backend, no la IA. */
-function calcularTipoDerivacion(
-  nivel: NivelUrgencia,
-  especialidad: EspecialidadCatalogo,
-): TipoDerivacion {
-  if (nivel === "emergencia") return "emergencia";
-  return normalizar(especialidad.nombre) ===
-    normalizar(ESPECIALIDAD_POR_DEFECTO)
-    ? "medicina_general"
-    : "especialista";
 }
