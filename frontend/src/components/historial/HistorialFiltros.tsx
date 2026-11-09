@@ -28,6 +28,7 @@ const OPCIONES_URGENCIA: { valor: NivelUrgencia; texto: string }[] = [
 
 const OPCIONES_ESTADO: { valor: EstadoConsulta; texto: string }[] = [
   { valor: "completada", texto: "Completada" },
+  { valor: "esperando_confirmacion", texto: "Por confirmar" },
   { valor: "esperando_respuestas", texto: "Sin terminar" },
   { valor: "cancelada", texto: "Cancelada" },
 ];
