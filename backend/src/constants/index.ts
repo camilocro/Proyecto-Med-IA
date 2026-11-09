@@ -63,3 +63,14 @@ export const MAX_CONSULTAS_EXPORTACION = 1000; // tope de filas al exportar CSV/
 export const MAX_MEDICOS_RANKING = 10; // HU-069
 export const DIAS_PERIODO_POR_DEFECTO = 30; // "último mes" en ranking y estadísticas
 export const MAX_BYTES_FOTO_MEDICO = 64 * 1024; // foto ya recortada a 256×256 (HU-060)
+// ─── Enlaces por correo (HU-004, HU-044) ──────────────────────────────────────
+export const HORAS_VIGENCIA_TOKEN_CORREO = 24;
+export const MINUTOS_ENTRE_CORREOS = 2; // evita usar el formulario para llenar el buzón de alguien
+// ─── Verificación en dos pasos (HU-046) ───────────────────────────────────────
+export const MINUTOS_VIGENCIA_CODIGO_2FA = 10;
+export const MAX_INTENTOS_2FA = 3;
+export const CANTIDAD_CODIGOS_RECUPERACION = 8;
+// ─── Registro de accesos (HU-047) ─────────────────────────────────────────────
+export const MAX_ACCESOS_POR_PAGINA = 25;
+export const MAX_ACCESOS_EXPORTACION = 2000; // tope de filas al exportar CSV
+export const MAX_ACCESOS_DETALLE_IP = 20; // últimos accesos que muestra el detalle de una IP
