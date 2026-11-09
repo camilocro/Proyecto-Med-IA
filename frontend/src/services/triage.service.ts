@@ -1,5 +1,5 @@
 import apiClient from "@/lib/apiClient";
-import { Consulta } from "@/types";
+import { Consulta, Medico } from "@/types";
 
 // Las peticiones que llaman a la IA tardan más que el resto:
 // el backend puede esperar hasta ~60 s, así que el frontend espera un poco más.
@@ -46,8 +46,58 @@ export const triageService = {
     return data.data;
   },
 
+  /** HU-053: corrige una respuesta antes de confirmar (vuelve a analizar) */
+  async editarRespuesta(
+    idConsulta: number,
+    idPr: number,
+    respuesta: string,
+  ): Promise<Consulta> {
+    const { data } = await apiClient.patch<{ data: Consulta }>(
+      `/consultas/${idConsulta}/respuestas/${idPr}`,
+      { respuesta },
+      { timeout: TIMEOUT_TRIAGE_MS },
+    );
+    return data.data;
+  },
+
+  /** HU-053: confirma el resumen; la respuesta trae el resultado y correoEnviado */
+  async confirmarConsulta(idConsulta: number): Promise<Consulta> {
+    const { data } = await apiClient.post<{ data: Consulta }>(
+      `/consultas/${idConsulta}/confirmar`,
+      undefined,
+      { timeout: TIMEOUT_TRIAGE_MS },
+    );
+    return data.data;
+  },
+
+  /** HU-052: misma consulta con otra descripción (no descuenta otra del límite) */
+  async reiniciarConsulta(
+    idConsulta: number,
+    descripcionSintomas: string,
+  ): Promise<Consulta> {
+    const { data } = await apiClient.post<{ data: Consulta }>(
+      `/consultas/${idConsulta}/reiniciar`,
+      { descripcion_sintomas: descripcionSintomas },
+      { timeout: TIMEOUT_TRIAGE_MS },
+    );
+    return data.data;
+  },
+
   async cancelarConsulta(idConsulta: number): Promise<void> {
     await apiClient.patch(`/consultas/${idConsulta}/cancelar`);
+  },
+
+  /** HU-065: la quita del historial del paciente */
+  async eliminarConsulta(idConsulta: number): Promise<void> {
+    await apiClient.delete(`/consultas/${idConsulta}`);
+  },
+
+  /** HU-057: médicos disponibles de una especialidad alternativa (público) */
+  async obtenerMedicosDeEspecialidad(idEspecialidad: number): Promise<Medico[]> {
+    const { data } = await apiClient.get<{ data: Medico[] }>(
+      `/medicos/especialidad/${idEspecialidad}`,
+    );
+    return data.data;
   },
 
   async obtenerHistorial(): Promise<Consulta[]> {

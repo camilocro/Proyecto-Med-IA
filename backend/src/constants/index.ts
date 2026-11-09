@@ -29,6 +29,10 @@ export const MOTIVO_CASO_COMPLEJO =
 export const MAX_LONGITUD_RESPUESTA = 500;
 
 export const MAX_MEDICOS_SUGERIDOS = 5;
+export const MAX_ESPECIALIDADES_ALTERNATIVAS = 2; // HU-057
+export const MAX_ITEMS_RESUMEN = 5; // HU-055: "Entendí que tienes: …"
+export const MENSAJE_IDIOMA_NO_SOPORTADO =
+  "Med-IA opera en español e inglés; por favor, reformulá tu consulta."; // HU-054
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 export const MAX_CONSULTAS_RECIENTES_ADMIN = 20; // también es el tamaño de página de la sección Consultas

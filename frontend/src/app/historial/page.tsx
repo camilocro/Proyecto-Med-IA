@@ -10,15 +10,17 @@ import HistorialFiltros, {
   FiltrosHistorial,
   FILTROS_VACIOS,
 } from "@/components/historial/HistorialFiltros";
+import ConfirmarDialogo from "@/components/admin/ConfirmarDialogo";
 import { descargarPDF, fechaParaArchivo, fechaHoraLegible } from "@/lib/exportar";
+import { mensajeDeError } from "@/lib/errores";
 import {
   Calendar,
-  ChevronRight,
   ClipboardList,
   AlertCircle,
   SearchX,
   FileDown,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -45,6 +47,8 @@ const ETIQUETA_ESTADO: Partial<
   Record<EstadoConsulta, { texto: string; clases: string }>
 > = {
   cancelada: { texto: "Cancelada", clases: "bg-red-100 text-red-700" },
+  // HU-053: la IA ya tiene un resultado, pero el paciente no lo confirmó
+  esperando_confirmacion: { texto: "Por confirmar", clases: "bg-sky-100 text-sky-700" },
   esperando_respuestas: {
     texto: "Sin terminar",
     clases: "bg-amber-100 text-amber-700",
@@ -154,6 +158,11 @@ export default function HistorialPage() {
   const [filtros, setFiltros] = useState<FiltrosHistorial>(FILTROS_VACIOS);
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [avisoPDF, setAvisoPDF] = useState<string | null>(null);
+  // HU-065: eliminar una consulta del historial
+  const [aEliminar, setAEliminar] = useState<Consulta | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
+  const [avisoEliminada, setAvisoEliminada] = useState(false);
 
   useEffect(() => {
     triageService
@@ -195,6 +204,25 @@ export default function HistorialPage() {
     } finally {
       setGenerandoPDF(false);
     }
+  }
+
+  async function confirmarEliminar() {
+    if (!aEliminar) return;
+    setEliminando(true);
+    setErrorEliminar(null);
+    const eliminada = await triageService
+      .eliminarConsulta(aEliminar.id_consulta)
+      .then(() => true)
+      .catch((err) => {
+        setErrorEliminar(mensajeDeError(err, "No se pudo eliminar la consulta. Intentá de nuevo."));
+        return false;
+      })
+      .finally(() => setEliminando(false));
+
+    if (!eliminada) return;
+    setConsultas((prev) => prev.filter((c) => c.id_consulta !== aEliminar.id_consulta));
+    setAEliminar(null);
+    setAvisoEliminada(true);
   }
 
   if (cargando) {
@@ -285,6 +313,15 @@ export default function HistorialPage() {
                 </button>
               </div>
 
+              {avisoEliminada && (
+                <p
+                  role="status"
+                  className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 mb-3"
+                >
+                  La consulta se eliminó de tu historial.
+                </p>
+              )}
+
               {avisoPDF && (
                 <p
                   role="status"
@@ -348,12 +385,24 @@ export default function HistorialPage() {
                           )}
                           {badgeEstado && (
                             <span
-                              className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeEstado.clases}`}
+                              className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${badgeEstado.clases}`}
                             >
                               {badgeEstado.texto}
                             </span>
                           )}
-                          <ChevronRight className="w-4 h-4 text-gray-300" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setErrorEliminar(null);
+                              setAvisoEliminada(false);
+                              setAEliminar(consulta);
+                            }}
+                            aria-label="Eliminar consulta del historial"
+                            title="Eliminar del historial"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -364,6 +413,29 @@ export default function HistorialPage() {
           )}
         </div>
       </main>
+
+      <ConfirmarDialogo
+        abierto={aEliminar !== null}
+        titulo="Eliminar consulta"
+        mensaje={
+          <>
+            <p>
+              La consulta del{" "}
+              <span className="font-medium text-gray-800">
+                {aEliminar ? formatearFecha(aEliminar.fecha_consulta) : ""}
+              </span>{" "}
+              dejará de aparecer en tu historial.
+            </p>
+            <p className="font-medium text-red-700">Esta acción no se puede deshacer.</p>
+          </>
+        }
+        textoConfirmar="Eliminar"
+        tono="peligro"
+        cargando={eliminando}
+        error={errorEliminar}
+        onConfirmar={confirmarEliminar}
+        onCancelar={() => setAEliminar(null)}
+      />
 
       <Footer />
     </div>
