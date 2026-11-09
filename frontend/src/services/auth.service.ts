@@ -37,4 +37,20 @@ export const authService = {
     );
     return data.data.message;
   },
+
+  async verificarCorreo(token: string): Promise<string> {
+    const { data } = await apiClient.post<{ data: { message: string } }>(
+      "/auth/verificar",
+      { token },
+    );
+    return data.data.message;
+  },
+
+  async reenviarVerificacion(correo: string): Promise<string> {
+    const { data } = await apiClient.post<{ data: { message: string } }>(
+      "/auth/reenviar-verificacion",
+      { correo },
+    );
+    return data.data.message;
+  },
 };

@@ -5,6 +5,8 @@ import {
   logout,
   recuperar,
   restablecer,
+  verificar,
+  reenviarEnlaceVerificacion,
 } from "./auth.controller";
 import { requireAuth } from "../../middleware/auth.middleware";
 
@@ -15,5 +17,7 @@ router.post("/login", login);
 router.post("/logout", requireAuth, logout);
 router.post("/recuperar", recuperar);
 router.post("/restablecer", restablecer);
+router.post("/verificar", verificar);
+router.post("/reenviar-verificacion", reenviarEnlaceVerificacion);
 
 export default router;

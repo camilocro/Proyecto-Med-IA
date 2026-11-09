@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth.service";
-import { mensajeDeError } from "@/lib/errores";
+import { mensajeDeError, codigoDeError } from "@/lib/errores";
 import {
   RUTA_LOGIN_TRAS_REGISTRO,
   rutaInicioPorRol,
@@ -207,6 +207,13 @@ export default function AuthForm({
   // Error del servidor: permanece visible hasta que el usuario corrige un campo,
   // vuelve a enviar el formulario o cambia de pestaña.
   const [error, setError] = useState<string | null>(null);
+  // HU-044: correo del paciente que debe verificar su cuenta (muestra "Reenviar enlace")
+  const [correoSinVerificar, setCorreoSinVerificar] = useState<string | null>(
+    null,
+  );
+  const [reenvioVerificacion, setReenvioVerificacion] = useState<
+    "inactivo" | "enviando" | "enviado"
+  >("inactivo");
 
   // Tras un registro exitoso solo se muestra el inicio de sesión (HU-001 CA-5)
   const [registroExitoso, setRegistroExitoso] = useState(false);
@@ -282,6 +289,9 @@ export default function AuthForm({
         setError(
           mensajeDeError(err, "Credenciales inválidas. Verificá tus datos."),
         );
+        const sinVerificar = codigoDeError(err) === "CORREO_NO_VERIFICADO";
+        setCorreoSinVerificar(sinVerificar ? correoLogin.trim() : null);
+        setReenvioVerificacion("inactivo");
         return null;
       })
       .finally(() => setCargando(false));
@@ -289,6 +299,13 @@ export default function AuthForm({
     if (!resultado) return;
     guardarSesion(resultado.token, resultado.usuario);
     router.push(rutaInicioPorRol(resultado.usuario.rol)); // HU-039: el médico entra a su panel
+  }
+  async function handleReenviarVerificacion() {
+    if (!correoSinVerificar) return;
+    setReenvioVerificacion("enviando");
+    // El backend responde lo mismo exista o no la cuenta: no hay error que mostrar
+    await authService.reenviarVerificacion(correoSinVerificar).catch(() => {});
+    setReenvioVerificacion("enviado");
   }
 
   async function handleRegistro(e: React.FormEvent) {
@@ -373,7 +390,8 @@ export default function AuthForm({
         <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
           <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-green-700">
-            Tu cuenta fue creada correctamente. Iniciá sesión para continuar.
+            Tu cuenta fue creada correctamente. Te enviamos un correo para
+            verificarla. Mientras tanto, ya puedes iniciar sesión.
           </p>
         </div>
       )}
@@ -382,10 +400,32 @@ export default function AuthForm({
       {error && (
         <div
           role="alert"
-          className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 mb-4"
+          className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 space-y-2"
         >
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700">{error}</p>
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+          {/* HU-044: el paciente que no verificó su correo puede pedir otro enlace */}
+          {correoSinVerificar &&
+            tab === "login" &&
+            (reenvioVerificacion === "enviado" ? (
+              <p className="text-sm text-green-700 ml-6">
+                Te enviamos un enlace nuevo a {correoSinVerificar}. Revisá
+                también la carpeta de spam.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleReenviarVerificacion}
+                disabled={reenvioVerificacion === "enviando"}
+                className="ml-6 text-sm font-medium text-red-700 underline disabled:opacity-50"
+              >
+                {reenvioVerificacion === "enviando"
+                  ? "Enviando..."
+                  : "Reenviar enlace de verificación"}
+              </button>
+            ))}
         </div>
       )}
 

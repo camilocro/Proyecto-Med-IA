@@ -17,6 +17,11 @@ import {
   MENSAJE_ENLACE_INVALIDO,
 } from "./recuperacion.service";
 import { esTokenValido } from "../../shared/tokens";
+import {
+  verificarCorreo,
+  reenviarVerificacion,
+  MENSAJE_VERIFICACION_INVALIDA,
+} from "./verificacion.service";
 
 // ─── Validaciones de entrada (HU-001 CA-3/CA-4, HU-033) ──────────────────────
 // Sin estas validaciones, un body incompleto llegaba a Prisma y respondía 500.
@@ -119,5 +124,24 @@ export async function restablecer(req: Request, res: Response) {
   await restablecerPassword(token, validarPasswordNueva(password));
   res.json(
     ok({ message: "Tu contraseña se actualizó. Ya puedes iniciar sesión." }),
+  );
+}
+export async function verificar(req: Request, res: Response) {
+  const { token } = (req.body ?? {}) as Record<string, unknown>;
+  if (!esTokenValido(token)) throw badRequest(MENSAJE_VERIFICACION_INVALIDA);
+
+  await verificarCorreo(token);
+  res.json(ok({ message: "Tu correo quedó verificado." }));
+}
+
+/** Responde siempre lo mismo, para no revelar qué correos están registrados. */
+export async function reenviarEnlaceVerificacion(req: Request, res: Response) {
+  const correo = validarCorreo((req.body ?? {}).correo);
+  await reenviarVerificacion(correo);
+  res.json(
+    ok({
+      message:
+        "Si la cuenta existe y falta verificarla, te enviamos un enlace nuevo.",
+    }),
   );
 }

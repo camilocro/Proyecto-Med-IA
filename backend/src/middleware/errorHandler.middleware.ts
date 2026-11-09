@@ -20,7 +20,7 @@ export function globalErrorHandler(
   _next: NextFunction,
 ) {
   if (error instanceof AppError) {
-    return responder(res, error.statusCode, error.message);
+    return responder(res, error.statusCode, error.message, error.codigo);
   }
 
   // Body mal formado o demasiado grande (los lanza express.json)
@@ -51,6 +51,13 @@ export function globalErrorHandler(
   );
 }
 
-function responder(res: Response, statusCode: number, message: string) {
-  return res.status(statusCode).json({ success: false, message });
+function responder(
+  res: Response,
+  statusCode: number,
+  message: string,
+  codigo?: string,
+) {
+  return res
+    .status(statusCode)
+    .json({ success: false, message, ...(codigo ? { codigo } : {}) });
 }

@@ -1,7 +1,18 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import prisma from "../../config/prisma";
-import { conflict, forbidden, unauthorized } from "../../errors/AppError";
+import {
+  AppError,
+  conflict,
+  forbidden,
+  unauthorized,
+} from "../../errors/AppError";
+import {
+  enviarVerificacion,
+  verificacionVencida,
+  CODIGO_CORREO_NO_VERIFICADO,
+  MENSAJE_CORREO_NO_VERIFICADO,
+} from "./verificacion.service";
 import {
   SALT_ROUNDS,
   JWT_EXPIRES_IN,
@@ -88,7 +99,13 @@ export async function registerUsuario(input: RegisterInput) {
       paciente: { create: {} },
     },
   });
-
+  // HU-044: correo de verificación. Sin await: el registro no espera al correo
+  void enviarVerificacion(usuario).catch((error) =>
+    console.error(
+      "[Verificación] No se pudo enviar el enlace:",
+      (error as Error).message,
+    ),
+  );
   const token = signToken(usuario);
 }
 
@@ -138,7 +155,14 @@ export async function loginUsuario(input: LoginInput) {
     where: { id_usuario: usuario.id_usuario },
     data: { intentos_fallidos: 0, bloqueado_hasta: null },
   });
-
+  // HU-044: pasadas 24 h sin verificar, el paciente debe verificar su correo para entrar
+  if (verificacionVencida(usuario)) {
+    throw new AppError(
+      MENSAJE_CORREO_NO_VERIFICADO,
+      403,
+      CODIGO_CORREO_NO_VERIFICADO,
+    );
+  }
   const token = signToken(usuario);
   return { token, usuario: usuarioPublico(usuario) };
 }
