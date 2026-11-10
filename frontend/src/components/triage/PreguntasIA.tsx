@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { RondaPreguntas } from '@/types'
 import { Bot, ChevronRight } from 'lucide-react'
+import ResumenEntendido from './ResumenEntendido'
 
 interface PreguntasIAProps {
   descripcionOriginal: string
+  resumen?:            string | null // HU-055
   ronda:               RondaPreguntas
   numeroRonda:         number
   cargando:            boolean
@@ -14,6 +16,7 @@ interface PreguntasIAProps {
 
 export default function PreguntasIA({
   descripcionOriginal,
+  resumen,
   ronda,
   numeroRonda,
   cargando,
@@ -48,6 +51,8 @@ export default function PreguntasIA({
         <p className="text-xs font-medium text-gray-500 mb-1">Describiste:</p>
         <p className="text-sm text-gray-700 italic">"{descripcionOriginal}"</p>
       </div>
+
+      <ResumenEntendido resumen={resumen} />
 
       {/* Respuesta de la IA */}
       <div className="flex gap-3">

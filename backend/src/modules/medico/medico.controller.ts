@@ -10,12 +10,15 @@ import {
   crearMedico,
   actualizarMedico,
   cambiarEstadoMedico,
+  actualizarFotoMedico,
+  getEstadisticasMedico,
   DatosNuevoMedico,
   CambiosMedico,
   CambiosPerfilMedico,
 } from './medico.service'
 import { ok, AuthenticatedRequest } from '../../shared/types'
 import { badRequest } from '../../errors/AppError'
+import { parsearRangoFechas, formatearFechaLocal } from '../../shared/fechas'
 import {
   MIN_LONGITUD_NOMBRE,
   MAX_LONGITUD_NOMBRE,
@@ -23,6 +26,8 @@ import {
   MAX_LONGITUD_DESCRIPCION_MEDICO,
   MIN_LONGITUD_TELEFONO,
   MAX_LONGITUD_TELEFONO,
+  MAX_BYTES_FOTO_MEDICO,
+  DIAS_PERIODO_POR_DEFECTO,
 } from '../../constants'
 
 // ─── Validaciones de entrada ──────────────────────────────────────────────────
@@ -110,6 +115,31 @@ function validarCambiosPerfil(body: unknown): CambiosPerfilMedico {
   return cambios
 }
 
+// Data URL de una imagen JPG o PNG en base64 (el navegador ya la recortó a 256×256)
+const REGEX_FOTO = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/
+
+// Primeros bytes reales de cada formato: evita que se guarde otra cosa con el tipo cambiado
+const FIRMAS_IMAGEN: Record<string, number[]> = {
+  jpeg: [0xff, 0xd8, 0xff],
+  png:  [0x89, 0x50, 0x4e, 0x47],
+}
+
+/** HU-060 CA-1/CA-2: solo JPG o PNG reales y dentro del tamaño permitido */
+function validarFoto(valor: unknown): string {
+  const coincidencia = typeof valor === 'string' ? REGEX_FOTO.exec(valor) : null
+  if (!coincidencia) throw badRequest('La foto debe ser una imagen JPG o PNG')
+
+  const [, formato, base64] = coincidencia
+  const bytes = Buffer.from(base64, 'base64')
+  if (bytes.length > MAX_BYTES_FOTO_MEDICO) {
+    throw badRequest(`La foto procesada no puede superar ${MAX_BYTES_FOTO_MEDICO / 1024} KB`)
+  }
+  if (!FIRMAS_IMAGEN[formato].every((byte, i) => bytes[i] === byte)) {
+    throw badRequest('El archivo no es una imagen JPG o PNG válida')
+  }
+  return valor as string
+}
+
 // ─── Handlers públicos y del propio médico ────────────────────────────────────
 
 export async function porEspecialidad(req: Request, res: Response) {
@@ -140,6 +170,30 @@ export async function toggleDisponibilidad(req: Request, res: Response) {
   if (typeof disponible !== 'boolean') throw badRequest('El campo "disponible" debe ser true o false')
 
   const medico = await cambiarDisponibilidad(id_usuario, disponible)
+  res.json(ok(medico))
+}
+
+/** GET /medicos/estadisticas?desde&hasta — por defecto, el último mes (HU-061) */
+export async function estadisticas(req: Request, res: Response) {
+  const { id_usuario } = (req as AuthenticatedRequest).usuario
+  const periodo        = parsearRangoFechas(req.query.desde, req.query.hasta, DIAS_PERIODO_POR_DEFECTO)
+  const datos          = await getEstadisticasMedico(id_usuario, periodo)
+  res.json(ok({
+    ...datos,
+    desde: periodo.gte ? formatearFechaLocal(periodo.gte) : null,
+    hasta: periodo.lt ? formatearFechaLocal(new Date(periodo.lt.getTime() - 1)) : null,
+  }))
+}
+
+export async function actualizarFoto(req: Request, res: Response) {
+  const { id_usuario } = (req as AuthenticatedRequest).usuario
+  const medico         = await actualizarFotoMedico(id_usuario, validarFoto(req.body?.imagen))
+  res.json(ok(medico))
+}
+
+export async function eliminarFoto(req: Request, res: Response) {
+  const { id_usuario } = (req as AuthenticatedRequest).usuario
+  const medico         = await actualizarFotoMedico(id_usuario, null)
   res.json(ok(medico))
 }
 

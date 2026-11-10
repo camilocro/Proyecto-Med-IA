@@ -1,11 +1,25 @@
-import { Router } from 'express'
-import { register, login, logout } from './auth.controller'
-import { requireAuth } from '../../middleware/auth.middleware'
+import { Router } from "express";
+import {
+  register,
+  login,
+  logout,
+  recuperar,
+  restablecer,
+  verificar,
+  reenviarEnlaceVerificacion,
+  verificar2FA,
+} from "./auth.controller";
+import { requireAuth } from "../../middleware/auth.middleware";
 
-const router = Router()
+const router = Router();
 
-router.post('/register', register)
-router.post('/login',    login)
-router.post('/logout',   requireAuth, logout)
+router.post("/register", register);
+router.post("/login", login);
+router.post("/logout", requireAuth, logout);
+router.post("/recuperar", recuperar);
+router.post("/restablecer", restablecer);
+router.post("/verificar", verificar);
+router.post("/reenviar-verificacion", reenviarEnlaceVerificacion);
+router.post("/2fa", verificar2FA);
 
-export default router
+export default router;

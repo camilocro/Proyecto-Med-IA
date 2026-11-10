@@ -10,12 +10,17 @@ import HistorialFiltros, {
   FiltrosHistorial,
   FILTROS_VACIOS,
 } from "@/components/historial/HistorialFiltros";
+import ConfirmarDialogo from "@/components/admin/ConfirmarDialogo";
+import { descargarPDF, fechaParaArchivo, fechaHoraLegible } from "@/lib/exportar";
+import { mensajeDeError } from "@/lib/errores";
 import {
   Calendar,
-  ChevronRight,
   ClipboardList,
   AlertCircle,
   SearchX,
+  FileDown,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,6 +47,8 @@ const ETIQUETA_ESTADO: Partial<
   Record<EstadoConsulta, { texto: string; clases: string }>
 > = {
   cancelada: { texto: "Cancelada", clases: "bg-red-100 text-red-700" },
+  // HU-053: la IA ya tiene un resultado, pero el paciente no lo confirmó
+  esperando_confirmacion: { texto: "Por confirmar", clases: "bg-sky-100 text-sky-700" },
   esperando_respuestas: {
     texto: "Sin terminar",
     clases: "bg-amber-100 text-amber-700",
@@ -94,6 +101,54 @@ function aplicarFiltros(
   });
 }
 
+/** Filtros activos en texto, para el encabezado del PDF (HU-064 CA-3) */
+function describirFiltros(filtros: FiltrosHistorial): string[] {
+  const lineas: string[] = [];
+  if (filtros.desde || filtros.hasta) {
+    lineas.push(
+      `Período: ${filtros.desde ? `desde el ${filtros.desde}` : ""}${filtros.desde && filtros.hasta ? " " : ""}${filtros.hasta ? `hasta el ${filtros.hasta}` : ""}`,
+    );
+  }
+  if (filtros.especialidad) lineas.push(`Especialidad: ${filtros.especialidad}`);
+  if (filtros.urgencia)
+    lineas.push(`Urgencia: ${ETIQUETA_URGENCIA[filtros.urgencia].texto}`);
+  if (filtros.estado)
+    lineas.push(
+      `Estado: ${filtros.estado === "completada" ? "Completada" : (ETIQUETA_ESTADO[filtros.estado]?.texto ?? filtros.estado)}`,
+    );
+  return lineas;
+}
+
+/** HU-064: PDF con las consultas que se ven en pantalla, de la más reciente a la más antigua */
+async function descargarHistorialPDF(
+  consultas: Consulta[],
+  filtros: FiltrosHistorial,
+) {
+  await descargarPDF({
+    nombreArchivo: `med-ia-mi-historial-${fechaParaArchivo()}.pdf`,
+    titulo: "Mi historial de consultas",
+    detalles: [
+      ...describirFiltros(filtros),
+      "Orientación preliminar generada por IA: no reemplaza el diagnóstico de un médico.",
+    ],
+    columnas: ["Fecha", "Síntomas", "Especialidad", "Urgencia", "Médicos recomendados"],
+    filas: consultas.map((c) => [
+      fechaHoraLegible(c.fecha_consulta),
+      c.descripcion_sintomas,
+      c.especialidad_sugerida?.nombre ??
+        ETIQUETA_ESTADO[c.estado]?.texto ??
+        "—",
+      c.nivel_urgencia ? ETIQUETA_URGENCIA[c.nivel_urgencia].texto : "—",
+      c.medicos_sugeridos
+        ?.map(({ medico }) => medico.usuario?.nombre)
+        .filter(Boolean)
+        .join(", ") || "—",
+    ]),
+    mensajeVacio: "No hay consultas para exportar.",
+    horizontal: true,
+  });
+}
+
 // ─── Componente ────────────────────────────────────────────────────────────────
 
 export default function HistorialPage() {
@@ -101,6 +156,13 @@ export default function HistorialPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<FiltrosHistorial>(FILTROS_VACIOS);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
+  const [avisoPDF, setAvisoPDF] = useState<string | null>(null);
+  // HU-065: eliminar una consulta del historial
+  const [aEliminar, setAEliminar] = useState<Consulta | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
+  const [avisoEliminada, setAvisoEliminada] = useState(false);
 
   useEffect(() => {
     triageService
@@ -126,6 +188,42 @@ export default function HistorialPage() {
     () => aplicarFiltros(consultas, filtros),
     [consultas, filtros],
   );
+
+  async function handleDescargarPDF() {
+    // CA-4: sin consultas no se genera un archivo vacío
+    if (consultasFiltradas.length === 0) {
+      setAvisoPDF("No hay registros para exportar con los filtros actuales.");
+      return;
+    }
+    setGenerandoPDF(true);
+    setAvisoPDF(null);
+    try {
+      await descargarHistorialPDF(consultasFiltradas, filtros);
+    } catch {
+      setAvisoPDF("No se pudo generar el PDF. Intentá de nuevo.");
+    } finally {
+      setGenerandoPDF(false);
+    }
+  }
+
+  async function confirmarEliminar() {
+    if (!aEliminar) return;
+    setEliminando(true);
+    setErrorEliminar(null);
+    const eliminada = await triageService
+      .eliminarConsulta(aEliminar.id_consulta)
+      .then(() => true)
+      .catch((err) => {
+        setErrorEliminar(mensajeDeError(err, "No se pudo eliminar la consulta. Intentá de nuevo."));
+        return false;
+      })
+      .finally(() => setEliminando(false));
+
+    if (!eliminada) return;
+    setConsultas((prev) => prev.filter((c) => c.id_consulta !== aEliminar.id_consulta));
+    setAEliminar(null);
+    setAvisoEliminada(true);
+  }
 
   if (cargando) {
     return (
@@ -187,13 +285,51 @@ export default function HistorialPage() {
               <HistorialFiltros
                 filtros={filtros}
                 especialidades={especialidades}
-                onChange={setFiltros}
+                onChange={(nuevos) => {
+                  setFiltros(nuevos);
+                  setAvisoPDF(null);
+                }}
               />
 
-              <p className="text-xs text-gray-400 mb-3">
-                Mostrando {consultasFiltradas.length} de {consultas.length}{" "}
-                consultas
-              </p>
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <p className="text-xs text-gray-400">
+                  Mostrando {consultasFiltradas.length} de {consultas.length}{" "}
+                  consultas
+                </p>
+                {/* HU-064: descarga lo que se ve, con los filtros aplicados */}
+                <button
+                  type="button"
+                  onClick={handleDescargarPDF}
+                  disabled={generandoPDF}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline
+                             disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {generandoPDF ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="w-3.5 h-3.5" />
+                  )}
+                  Descargar PDF
+                </button>
+              </div>
+
+              {avisoEliminada && (
+                <p
+                  role="status"
+                  className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 mb-3"
+                >
+                  La consulta se eliminó de tu historial.
+                </p>
+              )}
+
+              {avisoPDF && (
+                <p
+                  role="status"
+                  className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-3"
+                >
+                  {avisoPDF}
+                </p>
+              )}
 
               {/* Sin resultados con los filtros */}
               {consultasFiltradas.length === 0 && (
@@ -249,12 +385,24 @@ export default function HistorialPage() {
                           )}
                           {badgeEstado && (
                             <span
-                              className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeEstado.clases}`}
+                              className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${badgeEstado.clases}`}
                             >
                               {badgeEstado.texto}
                             </span>
                           )}
-                          <ChevronRight className="w-4 h-4 text-gray-300" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setErrorEliminar(null);
+                              setAvisoEliminada(false);
+                              setAEliminar(consulta);
+                            }}
+                            aria-label="Eliminar consulta del historial"
+                            title="Eliminar del historial"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -265,6 +413,29 @@ export default function HistorialPage() {
           )}
         </div>
       </main>
+
+      <ConfirmarDialogo
+        abierto={aEliminar !== null}
+        titulo="Eliminar consulta"
+        mensaje={
+          <>
+            <p>
+              La consulta del{" "}
+              <span className="font-medium text-gray-800">
+                {aEliminar ? formatearFecha(aEliminar.fecha_consulta) : ""}
+              </span>{" "}
+              dejará de aparecer en tu historial.
+            </p>
+            <p className="font-medium text-red-700">Esta acción no se puede deshacer.</p>
+          </>
+        }
+        textoConfirmar="Eliminar"
+        tono="peligro"
+        cargando={eliminando}
+        error={errorEliminar}
+        onConfirmar={confirmarEliminar}
+        onCancelar={() => setAEliminar(null)}
+      />
 
       <Footer />
     </div>

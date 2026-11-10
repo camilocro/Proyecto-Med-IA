@@ -27,76 +27,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 import ConfiguracionPanel from "@/components/admin/ConfiguracionPanel";
-
-// ── Helpers de fecha ──────────────────────────────────────────────────────────
-
-function formatearFechaCorta(iso: string): string {
-  return new Date(iso).toLocaleString("es-BO", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-// ── Badges ────────────────────────────────────────────────────────────────────
-
-const URGENCIA_CLASES: Record<string, string> = {
-  alto: "bg-red-100 text-red-700",
-  medio: "bg-amber-100 text-amber-700",
-  bajo: "bg-green-100 text-green-700",
-  emergencia: "bg-purple-100 text-purple-700",
-};
-
-const URGENCIA_PUNTO: Record<string, string> = {
-  alto: "bg-red-500",
-  medio: "bg-amber-500",
-  bajo: "bg-green-500",
-  emergencia: "bg-purple-500",
-};
-
-const URGENCIA_LABEL: Record<string, string> = {
-  alto: "Alta",
-  medio: "Media",
-  bajo: "Baja",
-  emergencia: "Emergencia",
-};
-
-function BadgeUrgencia({ nivel }: { nivel: string | null }) {
-  if (!nivel) return <span className="text-gray-300 text-xs">—</span>;
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full
-      ${URGENCIA_CLASES[nivel] ?? "bg-gray-100 text-gray-600"}`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${URGENCIA_PUNTO[nivel] ?? "bg-gray-400"}`}
-      />
-      {URGENCIA_LABEL[nivel] ?? nivel}
-    </span>
-  );
-}
-
-const ESTADO_BADGE: Record<string, { texto: string; clases: string }> = {
-  completada: { texto: "Completada", clases: "bg-green-100 text-green-700" },
-  cancelada: { texto: "Cancelada", clases: "bg-red-100 text-red-700" },
-  esperando_respuestas: {
-    texto: "Esperando respuestas",
-    clases: "bg-amber-100 text-amber-700",
-  },
-  en_proceso: { texto: "En proceso", clases: "bg-blue-100 text-blue-700" },
-};
-
-function BadgeEstado({ estado }: { estado: string }) {
-  const badge = ESTADO_BADGE[estado] ?? ESTADO_BADGE.en_proceso;
-  return (
-    <span
-      className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${badge.clases}`}
-    >
-      {badge.texto}
-    </span>
-  );
-}
+import ConsultasPanel from "@/components/admin/ConsultasPanel";
+import RankingMedicos from "@/components/admin/RankingMedicos";
+import {
+  BadgeEstado,
+  BadgeUrgencia,
+  formatearFechaCorta,
+} from "@/components/admin/BadgesConsulta";
+import AccesosPanel from "@/components/admin/AccesosPanel";
 
 // ── Subtextos de las tarjetas (HU-032) ───────────────────────────────────────
 
@@ -142,6 +80,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "usuarios", label: "Usuarios" },
   { id: "medicos", label: "Médicos" },
   { id: "especialidades", label: "Especialidades" },
+  { id: "consultas", label: "Consultas" },
+  { id: "accesos", label: "Accesos" },
   { id: "configuracion", label: "Configuración" },
 ];
 
@@ -406,9 +346,18 @@ export default function AdminPage() {
                     <Clock className="w-5 h-5 text-gray-400" />
                     Consultas Recientes
                   </h2>
-                  <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-                    Últimas {consultas.length}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+                      Últimas {consultas.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTabActiva("consultas")}
+                      className="text-xs font-medium text-primary hover:underline whitespace-nowrap"
+                    >
+                      Ver todas
+                    </button>
+                  </div>
                 </div>
 
                 {cargando && consultas.length === 0 ? (
@@ -513,6 +462,9 @@ export default function AdminPage() {
                   <GraficoDonut datos={estadisticas?.porEspecialidad ?? []} />
                 </div>
               </section>
+
+              {/* Médicos más sugeridos (HU-069) */}
+              <RankingMedicos />
             </>
           )}
 
@@ -564,6 +516,12 @@ export default function AdminPage() {
           {tabActiva === "especialidades" && (
             <EspecialidadesPanel onDatosCambiados={cargarDatos} />
           )}
+
+          {/* ══ TAB CONSULTAS (HU-031, HU-068) ═════════════════════════════ */}
+          {tabActiva === "consultas" && <ConsultasPanel />}
+
+          {/* ══ TAB ACCESOS (HU-047) ═══════════════════════════════════════ */}
+          {tabActiva === "accesos" && <AccesosPanel />}
 
           {/* ══ TAB CONFIGURACIÓN (HU-067) ═════════════════════════════════ */}
           {tabActiva === "configuracion" && <ConfiguracionPanel />}

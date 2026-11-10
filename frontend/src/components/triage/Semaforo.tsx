@@ -55,6 +55,8 @@ const ORDEN_LUCES: NivelUrgencia[] = ['alto', 'medio', 'bajo']
 export default function Semaforo({ nivel }: SemaforoProps) {
   const config = CONFIGURACION_SEMAFORO[nivel]
   const luces  = COLORES_LUZ[nivel]
+  // El semáforo tiene tres luces: una emergencia enciende la roja (con su tono más oscuro)
+  const luzEncendida: NivelUrgencia = nivel === 'emergencia' ? 'alto' : nivel
 
   return (
     <div className={`rounded-xl border-2 ${config.borde} ${config.fondo} p-6 flex items-center gap-6`}>
@@ -64,7 +66,7 @@ export default function Semaforo({ nivel }: SemaforoProps) {
           <div
             key={luz}
             className={`w-8 h-8 rounded-full transition-all ${
-              luz === nivel ? `${luces.activo} shadow-lg` : luces.inactivo
+              luz === luzEncendida ? `${luces.activo} shadow-lg` : luces.inactivo
             }`}
           />
         ))}

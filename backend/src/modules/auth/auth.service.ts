@@ -1,13 +1,25 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import prisma from "../../config/prisma";
-import { conflict, forbidden, unauthorized } from "../../errors/AppError";
+import {
+  AppError,
+  conflict,
+  forbidden,
+  unauthorized,
+} from "../../errors/AppError";
+import {
+  enviarVerificacion,
+  verificacionVencida,
+  CODIGO_CORREO_NO_VERIFICADO,
+  MENSAJE_CORREO_NO_VERIFICADO,
+} from "./verificacion.service";
 import {
   SALT_ROUNDS,
   JWT_EXPIRES_IN,
   MAX_LOGIN_ATTEMPTS,
   LOCKOUT_DURATION_MINUTES,
 } from "../../constants";
+import { iniciarDesafio2FA, verificarDesafio2FA } from "./dobleFactor.service";
 
 interface RegisterInput {
   nombre: string;
@@ -41,16 +53,33 @@ function usuarioPublico(usuario: {
   };
 }
 
-function signToken(payload: {
+/** El token incluye token_version (tv): al cerrar sesión cambia, y los tokens viejos dejan de valer (HU-003 CA-3). */
+function signToken(usuario: {
   id_usuario: number;
   correo: string;
   rol: string;
+  token_version: number;
 }): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET no definido");
-  return jwt.sign(payload, secret, {
-    expiresIn: JWT_EXPIRES_IN,
-  } as jwt.SignOptions);
+  return jwt.sign(
+    {
+      id_usuario: usuario.id_usuario,
+      correo: usuario.correo,
+      rol: usuario.rol,
+      tv: usuario.token_version,
+    },
+    secret,
+    { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions,
+  );
+}
+
+/** Invalida todos los tokens del usuario: los ya emitidos dejan de pasar el middleware. */
+export async function invalidarSesiones(idUsuario: number): Promise<void> {
+  await prisma.usuario.update({
+    where: { id_usuario: idUsuario },
+    data: { token_version: { increment: 1 } },
+  });
 }
 
 export async function registerUsuario(input: RegisterInput) {
@@ -71,20 +100,23 @@ export async function registerUsuario(input: RegisterInput) {
       paciente: { create: {} },
     },
   });
-
-  const token = signToken({
-    id_usuario: usuario.id_usuario,
-    correo: usuario.correo,
-    rol: usuario.rol,
-  });
-  return { token, usuario: usuarioPublico(usuario) };
+  // HU-044: correo de verificación. Sin await: el registro no espera al correo
+  void enviarVerificacion(usuario).catch((error) =>
+    console.error(
+      "[Verificación] No se pudo enviar el enlace:",
+      (error as Error).message,
+    ),
+  );
+  const token = signToken(usuario);
 }
 
 export async function loginUsuario(input: LoginInput) {
   const usuario = await prisma.usuario.findUnique({
     where: { correo: input.correo },
   });
-  if (!usuario) throw unauthorized("Credenciales inválidas");
+  // HU-048: una cuenta eliminada responde igual que una que no existe
+  if (!usuario || usuario.eliminado_en)
+    throw unauthorized("Credenciales inválidas");
 
   if (usuario.bloqueado_hasta && usuario.bloqueado_hasta > new Date()) {
     throw unauthorized(
@@ -126,11 +158,32 @@ export async function loginUsuario(input: LoginInput) {
     where: { id_usuario: usuario.id_usuario },
     data: { intentos_fallidos: 0, bloqueado_hasta: null },
   });
+  // HU-044: pasadas 24 h sin verificar, el paciente debe verificar su correo para entrar
+  if (verificacionVencida(usuario)) {
+    throw new AppError(
+      MENSAJE_CORREO_NO_VERIFICADO,
+      403,
+      CODIGO_CORREO_NO_VERIFICADO,
+    );
+  }
+  // HU-046: el médico con verificación en dos pasos recibe un código por correo en lugar del token
+  if (usuario.rol === "medico" && usuario.doble_factor) {
+    return iniciarDesafio2FA(usuario);
+  }
+  const token = signToken(usuario);
+  return { token, usuario: usuarioPublico(usuario) };
+}
+/** HU-046: segundo paso del login. Con el código correcto entrega el token de sesión. */
+export async function completarLogin2FA(desafio: unknown, codigo: unknown) {
+  const idUsuario = await verificarDesafio2FA(desafio, codigo);
 
-  const token = signToken({
-    id_usuario: usuario.id_usuario,
-    correo: usuario.correo,
-    rol: usuario.rol,
+  const usuario = await prisma.usuario.findUnique({
+    where: { id_usuario: idUsuario },
   });
+  if (!usuario || !usuario.activo || usuario.eliminado_en) {
+    throw unauthorized("Credenciales inválidas");
+  }
+
+  const token = signToken(usuario);
   return { token, usuario: usuarioPublico(usuario) };
 }

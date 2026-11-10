@@ -3,6 +3,7 @@
 import { Consulta } from "@/types";
 import Semaforo from "./Semaforo";
 import MedicoCard from "./MedicoCard";
+import EspecialidadesAlternativas from "./EspecialidadesAlternativas";
 import {
   AlertTriangle,
   CheckCircle,
@@ -10,6 +11,8 @@ import {
   RotateCcw,
   UserPlus,
   History,
+  Mail,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,6 +32,9 @@ export default function ResultadoTriage({
   const nivelUrgencia = consulta.nivel_urgencia ?? "bajo";
   const { estaAutenticado, cargando: cargandoSesion } = useAuth();
   const esAnonimo = !cargandoSesion && !estaAutenticado;
+  // HU-058 CA-2: se muestran igual, pero se avisa que hoy nadie está disponible
+  const ningunoDisponible =
+    medicosLista.length > 0 && medicosLista.every(({ medico }) => !medico.disponible);
 
   return (
     <div className="space-y-6">
@@ -60,6 +66,9 @@ export default function ResultadoTriage({
               {especialidad.descripcion}
             </p>
           )}
+          <EspecialidadesAlternativas
+            alternativas={consulta.especialidades_alternativas ?? []}
+          />
         </div>
       )}
 
@@ -91,8 +100,17 @@ export default function ResultadoTriage({
       {/* Médicos sugeridos */}
       <div>
         <p className="font-semibold text-gray-900 mb-3">
-          Médicos disponibles{especialidad ? ` en ${especialidad.nombre}` : ""}
+          Médicos{especialidad ? ` de ${especialidad.nombre}` : ""}
         </p>
+        {ningunoDisponible && (
+          <p
+            role="status"
+            className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3"
+          >
+            <Clock className="w-4 h-4 flex-shrink-0" />
+            Ningún médico está disponible ahora; intentá más tarde.
+          </p>
+        )}
         {medicosLista.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {medicosLista.map(({ medico }) => (
@@ -106,6 +124,20 @@ export default function ResultadoTriage({
           </p>
         )}
       </div>
+
+      {/* Aviso del correo con el resumen (HU-070) */}
+      {consulta.correoEnviado === true && (
+        <p className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg p-3">
+          <Mail className="w-4 h-4 flex-shrink-0" />
+          Te enviamos el resumen de esta consulta a tu correo.
+        </p>
+      )}
+      {consulta.correoEnviado === false && estaAutenticado && (
+        <p className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+          <History className="w-4 h-4 flex-shrink-0" />
+          Podés ver tu resultado en el historial.
+        </p>
+      )}
 
       {/* Invitación a registrarse (HU-038): solo para anónimos */}
       {esAnonimo && (

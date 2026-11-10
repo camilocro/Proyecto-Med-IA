@@ -4,7 +4,11 @@ import {
   crearConsulta,
   obtenerConsulta,
   guardarRespuestas,
+  corregirRespuesta,
+  reiniciarConsulta,
+  confirmarConsulta,
   cancelarConsulta,
+  ocultarConsulta,
   obtenerHistorialPaciente,
   Solicitante,
   RespuestaRonda,
@@ -39,24 +43,26 @@ function validarDescripcion(valor: unknown): string {
   return descripcion;
 }
 
+function validarRespuesta(valor: unknown): string {
+  const respuesta = typeof valor === "string" ? valor.trim() : "";
+  if (!respuesta) throw badRequest("Debes responder todas las preguntas");
+  if (respuesta.length > MAX_LONGITUD_RESPUESTA) {
+    throw badRequest(
+      `Cada respuesta puede tener como máximo ${MAX_LONGITUD_RESPUESTA} caracteres`,
+    );
+  }
+  return respuesta;
+}
+
 function validarRespuestas(valor: unknown): RespuestaRonda[] {
   if (!Array.isArray(valor) || valor.length === 0) {
     throw badRequest("Envía las respuestas de la ronda");
   }
   return valor.map((r) => {
     const id_pr = Number(r?.id_pr);
-    const respuesta =
-      typeof r?.respuesta === "string" ? r.respuesta.trim() : "";
-
     if (!Number.isInteger(id_pr))
       throw badRequest("Cada respuesta debe indicar el id_pr de su pregunta");
-    if (!respuesta) throw badRequest("Debes responder todas las preguntas");
-    if (respuesta.length > MAX_LONGITUD_RESPUESTA) {
-      throw badRequest(
-        `Cada respuesta puede tener como máximo ${MAX_LONGITUD_RESPUESTA} caracteres`,
-      );
-    }
-    return { id_pr, respuesta };
+    return { id_pr, respuesta: validarRespuesta(r?.respuesta) };
   });
 }
 
@@ -66,7 +72,7 @@ function parsearId(valor: string, nombre: string): number {
   return id;
 }
 
-/** Quién hace la petición: paciente registrado, sesión anónima y si es admin. */
+/** Quién hace la petición: paciente registrado o sesión anónima. */
 async function obtenerSolicitante(req: Request): Promise<Solicitante> {
   const usuario = (req as AuthenticatedRequest).usuario;
   return {
@@ -74,7 +80,6 @@ async function obtenerSolicitante(req: Request): Promise<Solicitante> {
       ? await getIdPacientePorUsuario(usuario.id_usuario)
       : undefined,
     sesionAnonimo: obtenerIdentificadorAnonimo(req),
-    esAdmin: usuario?.rol === "administrador",
   };
 }
 
@@ -122,6 +127,44 @@ export async function responderRonda(req: Request, res: Response) {
   res.json(ok(consulta));
 }
 
+/** PATCH /consultas/:id/respuestas/:idPr — corrige una respuesta antes de confirmar (HU-053) */
+export async function editarRespuesta(req: Request, res: Response) {
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const idPr = parsearId(req.params.idPr, "ID de pregunta");
+  const respuesta = validarRespuesta(req.body?.respuesta);
+
+  const consulta = await corregirRespuesta(
+    idConsulta,
+    idPr,
+    respuesta,
+    await obtenerSolicitante(req),
+  );
+  res.json(ok(consulta));
+}
+
+/** POST /consultas/:id/reiniciar — vuelve a empezar con otra descripción (HU-052) */
+export async function reiniciar(req: Request, res: Response) {
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const descripcion = validarDescripcion(req.body?.descripcion_sintomas);
+
+  const consulta = await reiniciarConsulta(
+    idConsulta,
+    descripcion,
+    await obtenerSolicitante(req),
+  );
+  res.json(ok(consulta));
+}
+
+/** POST /consultas/:id/confirmar — el paciente confirma el resumen (HU-053) */
+export async function confirmar(req: Request, res: Response) {
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const consulta = await confirmarConsulta(
+    idConsulta,
+    await obtenerSolicitante(req),
+  );
+  res.json(ok(consulta));
+}
+
 export async function cancelar(req: Request, res: Response) {
   const idConsulta = parsearId(req.params.id, "ID de consulta");
   const consulta = await cancelarConsulta(
@@ -129,6 +172,14 @@ export async function cancelar(req: Request, res: Response) {
     await obtenerSolicitante(req),
   );
   res.json(ok(consulta));
+}
+
+/** DELETE /consultas/:id — la quita del historial del paciente (HU-065) */
+export async function eliminar(req: Request, res: Response) {
+  const idConsulta = parsearId(req.params.id, "ID de consulta");
+  const { id_usuario } = (req as AuthenticatedRequest).usuario;
+  await ocultarConsulta(idConsulta, id_usuario);
+  res.json(ok({ message: "Consulta eliminada de tu historial" }));
 }
 
 export async function historial(req: Request, res: Response) {
