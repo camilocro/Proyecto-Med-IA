@@ -73,10 +73,14 @@ npm run dev                        # http://localhost:3000
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Análisis de síntomas con la IA |
 | `IA_MODO_SIMULADO` | `true` = IA simulada, sin gastar créditos (útil para desarrollar y para la demo) |
 | `FRONTEND_URL` | CORS y enlaces de los correos |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `CORREO_REMITENTE` | Envío de correos (Gmail con contraseña de aplicación) |
+| `TRUST_PROXY` | Cantidad de proxies delante del backend: `0` en local, `1` en Render (para que las IP de Accesos sean las reales) |
+| `BREVO_API_KEY` | Envío de correos por la API de Brevo (producción: Render bloquea SMTP en el plan gratis) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Envío de correos por Gmail con contraseña de aplicación (local) |
+| `CORREO_REMITENTE` | Remitente de los correos; con Brevo debe ser el remitente verificado |
 
-Si `SMTP_USER` está vacío, los correos (verificación, recuperación, código 2FA, avisos) **se imprimen en
-la consola del backend** con sus enlaces: el sistema funciona igual en desarrollo.
+Los correos salen por Brevo si hay `BREVO_API_KEY`; si no, por Gmail si hay `SMTP_USER`. Si no hay
+ninguna de las dos, los correos (verificación, recuperación, código 2FA, avisos) **se imprimen en la
+consola del backend** con sus enlaces: el sistema funciona igual en desarrollo.
 
 Los valores reales del `.env` se comparten solo por privado y nunca se suben al repositorio.
 
@@ -111,8 +115,11 @@ Cada módulo vive en `src/modules/<nombre>/`: `*.routes.ts` (rutas y middlewares
   que no hace falta try/catch en los controllers.
 - Sesión: JWT con `token_version`; cerrar sesión, cambiar o restablecer la contraseña invalidan los tokens
   anteriores. `requireAuth` también rechaza cuentas desactivadas.
-- Correos: `src/shared/correo.ts` (nunca lanza error; registra cada envío en `NotificacionEmail`) y
-  `src/shared/plantillaCorreo.ts`.
+- Correos: `src/shared/correo.ts` (Brevo, Gmail o consola; nunca lanza error; registra cada envío en
+  `NotificacionEmail`) y `src/shared/plantillaCorreo.ts`.
+- Borrado lógico: no se borran filas. Las consultas eliminadas se ocultan (`oculta_paciente`) y las
+  cuentas eliminadas se marcan con `eliminado_en` y se anonimizan (también en `IntentoLogin` y
+  `NotificacionEmail`), así el registro de accesos y las estadísticas se conservan.
 - Auditoría: las acciones del administrador sobre datos de pacientes, estados de cuentas y configuración
   quedan en `AuditoriaAcceso`; los intentos de login, en `IntentoLogin`.
 
