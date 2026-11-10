@@ -155,9 +155,10 @@ const NOMBRE_CUENTA_ELIMINADA = "Cuenta eliminada";
 const DOMINIO_CUENTA_ELIMINADA = "eliminada.med-ia.invalid"; // .invalid nunca existe
 
 /**
- * HU-048: el paciente elimina su cuenta. Se borran sus datos personales (CA-2) y la cuenta
- * queda anonimizada con eliminado_en: sus consultas se ocultan y ya no se pueden asociar
- * a una persona, pero siguen contando en las estadísticas y en las derivaciones de los médicos.
+ * HU-048: el paciente elimina su cuenta. Borrado lógico: no se borra ninguna fila.
+ * Sus datos personales se reemplazan por valores anónimos (CA-2) y la cuenta queda marcada
+ * con eliminado_en; sus consultas se ocultan, pero siguen contando en las estadísticas y en
+ * las derivaciones de los médicos, y sus intentos de acceso siguen visibles en Accesos (HU-047).
  * Todo en una transacción: o se aplica todo, o nada.
  */
 export async function eliminarCuenta(
@@ -180,6 +181,9 @@ export async function eliminarCuenta(
   const passwordValida = await bcrypt.compare(password, usuario.password_hash);
   if (!passwordValida) throw badRequest("La contraseña es incorrecta");
 
+  // El mismo correo anónimo reemplaza al real en todas las tablas que lo guardan
+  const correoAnonimo = `eliminada-${idUsuario}@${DOMINIO_CUENTA_ELIMINADA}`;
+
   await prisma.$transaction([
     // Sus consultas dejan de verse en su historial, pero se conservan para auditoría y estadísticas
     prisma.consulta.updateMany({
@@ -191,29 +195,32 @@ export async function eliminarCuenta(
       where: { id_usuario: idUsuario, usado: false },
       data: { usado: true },
     }),
-    // CA-2: se borran los datos personales de los registros de acceso y de correos enviados
-    prisma.intentoLogin.deleteMany({
+    // CA-2 con borrado lógico: los intentos de acceso (HU-047) y el registro de correos
+    // se conservan para auditoría, pero con el correo anonimizado en lugar del real
+    prisma.intentoLogin.updateMany({
       where: {
         OR: [{ id_usuario: idUsuario }, { correo_intentado: usuario.correo }],
       },
+      data: { correo_intentado: correoAnonimo },
     }),
-    prisma.notificacionEmail.deleteMany({
+    prisma.notificacionEmail.updateMany({
       where: {
         OR: [{ id_usuario: idUsuario }, { destinatario: usuario.correo }],
       },
+      data: { destinatario: correoAnonimo },
     }),
     prisma.paciente.update({
       where: { id_paciente: usuario.paciente.id_paciente },
       data: { fecha_nacimiento: null },
     }),
-    // La fila queda (las consultas la referencian), pero sin nombre, correo ni contraseña:
-    // ya no identifica a nadie y el correo queda libre para registrarse de nuevo.
+    // La fila queda (borrado lógico con eliminado_en), pero sin nombre, correo ni contraseña:
+    // ya no identifica a nadie y el correo real queda libre para registrarse de nuevo.
     // token_version cierra todas sus sesiones.
     prisma.usuario.update({
       where: { id_usuario: idUsuario },
       data: {
         nombre: NOMBRE_CUENTA_ELIMINADA,
-        correo: `eliminada-${idUsuario}@${DOMINIO_CUENTA_ELIMINADA}`,
+        correo: correoAnonimo,
         password_hash: "cuenta-eliminada",
         eliminado_en: new Date(),
         activo: false,
