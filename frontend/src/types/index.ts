@@ -78,6 +78,7 @@ export interface Consulta {
   estado: EstadoConsulta;
   fecha_consulta: string;
   especialidad_sugerida?: Especialidad;
+  motivo_derivacion?: string | null; // por qué se sugiere esa especialidad (HU-010 CA-5, HU-029)
   medicos_sugeridos?: { medico: Medico }[];
   rondas?: RondaPreguntas[];
   sintomas_extraidos?: SintomaExtraido[];

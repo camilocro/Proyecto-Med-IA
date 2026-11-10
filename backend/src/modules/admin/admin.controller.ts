@@ -11,6 +11,7 @@ import {
   getConfiguracion,
   setConfiguracion,
   getEstadisticas,
+  getEstadisticasPeriodo,
   Auditor,
 } from "./admin.service";
 import { ok, AuthenticatedRequest } from "../../shared/types";
@@ -125,8 +126,7 @@ export async function cambiarEstado(req: Request, res: Response) {
   if (typeof activo !== "boolean")
     throw badRequest('El campo "activo" debe ser true o false');
 
-  const idAdmin = (req as AuthenticatedRequest).usuario.id_usuario;
-  const usuario = await cambiarEstadoUsuario(idUsuario, activo, idAdmin);
+  const usuario = await cambiarEstadoUsuario(idUsuario, activo, auditorDe(req));
   res.json(ok(usuario));
 }
 
@@ -140,10 +140,25 @@ export async function actualizarConfiguracion(req: Request, res: Response) {
   if (typeof clave !== "string" || !clave.trim() || valor === undefined) {
     throw badRequest('Envía "clave" y "valor"');
   }
-  const config = await setConfiguracion(clave.trim(), String(valor).trim());
+  const config = await setConfiguracion(
+    clave.trim(),
+    String(valor).trim(),
+    auditorDe(req),
+  );
   res.json(ok(config));
 }
 
 export async function estadisticas(_req: Request, res: Response) {
   res.json(ok(await getEstadisticas()));
+}
+
+/** GET /admin/estadisticas/periodo?desde&hasta — por defecto, el último mes (HU-032) */
+export async function estadisticasPeriodo(req: Request, res: Response) {
+  const fecha = parsearRangoFechas(
+    req.query.desde,
+    req.query.hasta,
+    DIAS_PERIODO_POR_DEFECTO,
+  );
+  const datos = await getEstadisticasPeriodo(fecha);
+  res.json(ok({ ...periodoDe(fecha), ...datos }));
 }

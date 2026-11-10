@@ -43,6 +43,7 @@ export interface DatosMedico {
 export interface MedicoCreado {
   medico:           MedicoAdmin
   passwordTemporal: string
+  correoEnviado:    boolean // HU-018 CA-3: si también se le enviaron por correo
 }
 
 // ── Servicio ──────────────────────────────────────────────────────────────────

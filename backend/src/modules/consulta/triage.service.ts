@@ -8,6 +8,7 @@ import {
   URGENCIA_CASO_COMPLEJO,
   MOTIVO_CASO_COMPLEJO,
   MAX_CONSULTAS_HISTORIAL_IA,
+  MESES_HISTORIAL_RECIENTE,
   MENSAJE_IDIOMA_NO_SOPORTADO,
   MAX_ESPECIALIDADES_ALTERNATIVAS,
 } from "../../constants";
@@ -312,10 +313,14 @@ async function obtenerHistorialParaIA(
     },
   });
 
+  const limiteReciente = new Date();
+  limiteReciente.setMonth(limiteReciente.getMonth() - MESES_HISTORIAL_RECIENTE);
+
   return anteriores.map((c) => ({
     fecha: formatearFechaLocal(c.fecha_consulta),
     especialidad: c.especialidad_sugerida?.nombre ?? "sin especialidad",
     nivelUrgencia: c.nivel_urgencia ?? "no indicada",
+    antigua: c.fecha_consulta < limiteReciente,
   }));
 }
 

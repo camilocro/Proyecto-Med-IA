@@ -35,6 +35,7 @@ import {
   formatearFechaCorta,
 } from "@/components/admin/BadgesConsulta";
 import AccesosPanel from "@/components/admin/AccesosPanel";
+import EstadisticasPeriodo from "@/components/admin/EstadisticasPeriodo";
 
 // ── Subtextos de las tarjetas (HU-032) ───────────────────────────────────────
 
@@ -108,6 +109,27 @@ const ESTADO_INICIAL: EstadoPagina = {
 };
 
 // ── Página ────────────────────────────────────────────────────────────────────
+
+// HU-030 CA-1/CA-2: las consultas recientes se ordenan de mayor a menor urgencia
+const PESO_URGENCIA: Record<string, number> = {
+  emergencia: 4,
+  alto: 3,
+  medio: 2,
+  bajo: 1,
+};
+
+function ordenarPorUrgencia(consultas: ConsultaReciente[]): ConsultaReciente[] {
+  return [...consultas].sort(
+    (a, b) =>
+      (PESO_URGENCIA[b.nivel_urgencia ?? ""] ?? 0) -
+        (PESO_URGENCIA[a.nivel_urgencia ?? ""] ?? 0) ||
+      new Date(b.fecha_consulta).getTime() -
+        new Date(a.fecha_consulta).getTime(),
+  );
+}
+
+const esUrgente = (nivel: string | null) =>
+  nivel === "alto" || nivel === "emergencia";
 
 export default function AdminPage() {
   const { usuario, cargando: cargandoAuth, esAdmin } = useAuth();
@@ -345,6 +367,9 @@ export default function AdminPage() {
                   <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
                     <Clock className="w-5 h-5 text-gray-400" />
                     Consultas Recientes
+                    <span className="hidden sm:inline text-xs font-normal text-gray-400">
+                      · de mayor a menor urgencia
+                    </span>
                   </h2>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
@@ -379,9 +404,7 @@ export default function AdminPage() {
                 ) : consultas.length === 0 ? (
                   <div className="py-16 text-center text-gray-400">
                     <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">
-                      No hay consultas registradas todavía.
-                    </p>
+                    <p className="text-sm">No hay actividad reciente.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -409,12 +432,22 @@ export default function AdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {consultas.map((c) => (
+                        {ordenarPorUrgencia(consultas).map((c) => (
                           <tr
                             key={c.id_consulta}
-                            className="hover:bg-gray-50/60 transition-colors"
+                            className={`transition-colors ${
+                              esUrgente(c.nivel_urgencia)
+                                ? "bg-red-50/60 hover:bg-red-50"
+                                : "hover:bg-gray-50/60"
+                            }`}
                           >
-                            <td className="px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap">
+                            <td
+                              className={`px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap ${
+                                esUrgente(c.nivel_urgencia)
+                                  ? "border-l-4 border-red-500"
+                                  : "border-l-4 border-transparent"
+                              }`}
+                            >
                               {c.paciente?.usuario?.nombre ?? "Anónimo"}
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px]">
@@ -462,6 +495,9 @@ export default function AdminPage() {
                   <GraficoDonut datos={estadisticas?.porEspecialidad ?? []} />
                 </div>
               </section>
+
+              {/* Estadísticas por período con exportación (HU-032) */}
+              <EstadisticasPeriodo />
 
               {/* Médicos más sugeridos (HU-069) */}
               <RankingMedicos />

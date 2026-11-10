@@ -25,6 +25,7 @@ import {
 import PreferenciasCorreo from "@/components/perfil/PreferenciasCorreo";
 import EliminarCuenta from "@/components/perfil/EliminarCuenta";
 import DobleFactor from "@/components/perfil/DobleFactor";
+import CambiarCorreo from "@/components/perfil/CambiarCorreo";
 
 // Mismas reglas que valida el backend (usuario.controller.ts)
 const MIN_LONGITUD_NOMBRE = 2;
@@ -260,16 +261,19 @@ export default function PerfilPage() {
 
     setGuardandoPassword(true);
     try {
-      await perfilService.actualizarPerfil({
+      const { token } = await perfilService.actualizarPerfil({
         contrasena: contrasenaNueva,
         contrasena_actual: contrasenaActual,
       });
+      // HU-043 CA-4: el backend cerró las demás sesiones y entregó un token nuevo para esta
+      if (token && usuario) guardarSesion(token, usuario);
       setContrasenaActual("");
       setContrasenaNueva("");
       setContrasenaConfirm("");
       setAlertaPassword({
         tipo: "exito",
-        mensaje: "Contraseña actualizada correctamente.",
+        mensaje:
+          "Contraseña actualizada correctamente. Se cerraron las sesiones abiertas en otros dispositivos.",
       });
     } catch (err: unknown) {
       const msg =
@@ -463,6 +467,20 @@ export default function PerfilPage() {
               </div>
             </form>
           </div>
+
+          {/* ── Cambiar correo (HU-005) ── */}
+          <CambiarCorreo
+            correoActual={perfil.correo}
+            onActualizado={(actualizado) => {
+              setPerfil(actualizado);
+              // La sesión guardada también muestra el correo (Navbar)
+              if (usuario)
+                guardarSesion(localStorage.getItem("med_ia_token") ?? "", {
+                  ...usuario,
+                  correo: actualizado.correo,
+                });
+            }}
+          />
 
           {/* ── Formulario: cambiar contraseña ── */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-8">

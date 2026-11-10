@@ -21,8 +21,9 @@ export const MIN_LONGITUD_DESCRIPCION = 10;
 export const MAX_LONGITUD_DESCRIPCION = 2000;
 export const MAX_LONGITUD_SESION_ID = 100;
 export const URGENCIA_CASO_COMPLEJO = "medio" as const;
+export const PREFIJO_MOTIVO_CASO_COMPLEJO = "Derivación automática - caso complejo";
 export const MOTIVO_CASO_COMPLEJO =
-  "Derivación automática - caso complejo: tus síntomas necesitan una evaluación presencial " +
+  `${PREFIJO_MOTIVO_CASO_COMPLEJO}: tus síntomas necesitan una evaluación presencial ` +
   "para poder aclararlos. Te recomendamos acudir a Medicina General.";
 
 //
@@ -46,6 +47,7 @@ export const DIAS_GRAFICO_CONSULTAS = 7;
 
 // Consultas completadas anteriores que se envían a la IA como contexto (HU-014, HU-056)
 export const MAX_CONSULTAS_HISTORIAL_IA = 3;
+export const MESES_HISTORIAL_RECIENTE = 6; // las más antiguas pesan menos para la IA (HU-014 CA-3)
 
 // ─── Médicos y especialidades ─────────────────────────────────────────────────
 export const MIN_LONGITUD_DESCRIPCION_MEDICO = 10;

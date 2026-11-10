@@ -23,7 +23,7 @@ const URGENCIA_CLASES: Record<string, string> = {
   emergencia: "bg-purple-100 text-purple-700",
 };
 
-const URGENCIA_PUNTO: Record<string, string> = {
+export const URGENCIA_PUNTO: Record<string, string> = {
   alto: "bg-red-500",
   medio: "bg-amber-500",
   bajo: "bg-green-500",
