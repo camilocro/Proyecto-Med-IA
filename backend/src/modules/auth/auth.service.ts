@@ -20,6 +20,8 @@ import {
   LOCKOUT_DURATION_MINUTES,
 } from "../../constants";
 import { iniciarDesafio2FA, verificarDesafio2FA } from "./dobleFactor.service";
+import { enviarCorreo } from "../../shared/correo";
+import { plantillaCorreo } from "../../shared/plantillaCorreo";
 
 interface RegisterInput {
   nombre: string;
@@ -54,7 +56,7 @@ function usuarioPublico(usuario: {
 }
 
 /** El token incluye token_version (tv): al cerrar sesión cambia, y los tokens viejos dejan de valer (HU-003 CA-3). */
-function signToken(usuario: {
+export function signToken(usuario: {
   id_usuario: number;
   correo: string;
   rol: string;
@@ -79,6 +81,38 @@ export async function invalidarSesiones(idUsuario: number): Promise<void> {
   await prisma.usuario.update({
     where: { id_usuario: idUsuario },
     data: { token_version: { increment: 1 } },
+  });
+}
+
+function mensajeBloqueo(hasta: Date): string {
+  const minutos = Math.max(1, Math.ceil((hasta.getTime() - Date.now()) / 60_000));
+  return `Por seguridad bloqueamos tu cuenta por demasiados intentos fallidos. Podrás intentarlo de nuevo en ${minutos} ${minutos === 1 ? "minuto" : "minutos"}.`;
+}
+
+/** HU-045 CA-5: correo de aviso del bloqueo (enviarCorreo nunca lanza error). */
+async function avisarBloqueo(usuario: {
+  id_usuario: number;
+  nombre: string;
+  correo: string;
+}): Promise<void> {
+  const html = plantillaCorreo({
+    titulo: "Bloqueamos el acceso a tu cuenta",
+    saludo: `Hola, ${usuario.nombre}:`,
+    parrafos: [
+      `Hubo ${MAX_LOGIN_ATTEMPTS} intentos seguidos de iniciar sesión con una contraseña incorrecta, así que bloqueamos tu cuenta por ${LOCKOUT_DURATION_MINUTES} minutos.`,
+      "Si fuiste tú, espera y vuelve a intentarlo. Si no fuiste tú, te recomendamos cambiar tu contraseña.",
+    ],
+    boton: {
+      texto: "Cambiar mi contraseña",
+      url: `${process.env.FRONTEND_URL ?? "http://localhost:3000"}/recuperar`,
+    },
+  });
+  await enviarCorreo({
+    para: usuario.correo,
+    asunto: "Med-IA: bloqueamos el acceso a tu cuenta",
+    html,
+    tipo: "aviso_seguridad",
+    idUsuario: usuario.id_usuario,
   });
 }
 
@@ -108,6 +142,7 @@ export async function registerUsuario(input: RegisterInput) {
     ),
   );
   const token = signToken(usuario);
+  return { token, usuario: usuarioPublico(usuario) };
 }
 
 export async function loginUsuario(input: LoginInput) {
@@ -118,10 +153,10 @@ export async function loginUsuario(input: LoginInput) {
   if (!usuario || usuario.eliminado_en)
     throw unauthorized("Credenciales inválidas");
 
-  if (usuario.bloqueado_hasta && usuario.bloqueado_hasta > new Date()) {
-    throw unauthorized(
-      "Cuenta bloqueada temporalmente por múltiples intentos fallidos",
-    );
+  const ahora = new Date();
+  // HU-045 CA-3: el aviso indica cuánto falta para que termine el bloqueo
+  if (usuario.bloqueado_hasta && usuario.bloqueado_hasta > ahora) {
+    throw unauthorized(mensajeBloqueo(usuario.bloqueado_hasta));
   }
 
   const passwordValida = await bcrypt.compare(
@@ -130,10 +165,13 @@ export async function loginUsuario(input: LoginInput) {
   );
 
   if (!passwordValida) {
-    const nuevosIntentos = usuario.intentos_fallidos + 1;
+    // HU-045 CA-2: si hubo un bloqueo (ya vencido: uno vigente se rechazó arriba),
+    // el conteo empieza de cero y un solo error no vuelve a bloquear la cuenta
+    const bloqueoVencido = usuario.bloqueado_hasta !== null;
+    const nuevosIntentos = (bloqueoVencido ? 0 : usuario.intentos_fallidos) + 1;
     const bloqueoHasta =
       nuevosIntentos >= MAX_LOGIN_ATTEMPTS
-        ? new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000)
+        ? new Date(ahora.getTime() + LOCKOUT_DURATION_MINUTES * 60 * 1000)
         : null;
 
     await prisma.usuario.update({
@@ -143,6 +181,12 @@ export async function loginUsuario(input: LoginInput) {
         bloqueado_hasta: bloqueoHasta,
       },
     });
+
+    if (bloqueoHasta) {
+      // HU-045 CA-1 y CA-5: se avisa en pantalla y por correo
+      void avisarBloqueo(usuario);
+      throw unauthorized(mensajeBloqueo(bloqueoHasta));
+    }
     throw unauthorized("Credenciales inválidas");
   }
 

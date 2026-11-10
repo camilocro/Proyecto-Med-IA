@@ -5,6 +5,8 @@ export type TipoNotificacion =
   | "verificacion_correo"
   | "recuperacion_password"
   | "codigo_2fa"
+  | "aviso_seguridad"
+  | "credenciales_medico"
   | "resumen_consulta"
   | "prueba";
 

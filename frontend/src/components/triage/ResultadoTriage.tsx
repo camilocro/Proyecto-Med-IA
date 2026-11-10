@@ -16,15 +16,19 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { esCasoComplejo } from "@/lib/triage";
 
 interface ResultadoTriageProps {
   consulta: Consulta;
   onNuevaConsulta: () => void;
+  /** Consultas que le quedan hoy (null si no se pudo saber) */
+  restantes?: number | null;
 }
 
 export default function ResultadoTriage({
   consulta,
   onNuevaConsulta,
+  restantes = null,
 }: ResultadoTriageProps) {
   const especialidad = consulta.especialidad_sugerida;
   const medicosLista = consulta.medicos_sugeridos ?? [];
@@ -35,6 +39,7 @@ export default function ResultadoTriage({
   // HU-058 CA-2: se muestran igual, pero se avisa que hoy nadie está disponible
   const ningunoDisponible =
     medicosLista.length > 0 && medicosLista.every(({ medico }) => !medico.disponible);
+  const casoComplejo = esCasoComplejo(consulta.motivo_derivacion);
 
   return (
     <div className="space-y-6">
@@ -47,6 +52,48 @@ export default function ResultadoTriage({
           profesional de la salud puede diagnosticar y tratar enfermedades.
         </p>
       </div>
+
+      {/* HU-066: aviso destacado de la última consulta del día, con acceso directo (CA-4) */}
+      {restantes === 1 && (
+        <div
+          role="status"
+          className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-50 border-2 border-amber-300 rounded-xl p-4"
+        >
+          <div className="flex items-start gap-3 flex-1">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800">
+              <span className="font-semibold">
+                Te queda 1 consulta disponible hoy.
+              </span>{" "}
+              Usala cuando la necesites.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onNuevaConsulta}
+            className="text-sm font-semibold text-amber-800 underline hover:no-underline whitespace-nowrap self-start sm:self-auto"
+          >
+            Hacer mi última consulta
+          </button>
+        </div>
+      )}
+
+      {/* HU-011 CA-2 y HU-029 CA-2/CA-4: el caso complejo pide evaluación presencial */}
+      {casoComplejo && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 bg-amber-50 border-2 border-amber-300 rounded-xl p-4"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">
+              Tu caso necesita una evaluación presencial.
+            </span>{" "}
+            Con lo que describiste no pudimos orientarte con seguridad: acudí a
+            un centro de salud para que un médico te revise en persona.
+          </p>
+        </div>
+      )}
 
       {/* Semáforo de urgencia */}
       <Semaforo nivel={nivelUrgencia} />
@@ -64,6 +111,13 @@ export default function ResultadoTriage({
           {especialidad.descripcion && (
             <p className="text-sm text-gray-500 mt-1">
               {especialidad.descripcion}
+            </p>
+          )}
+          {/* HU-010 CA-5: el motivo de la derivación (también cuando es Medicina General) */}
+          {consulta.motivo_derivacion && !casoComplejo && (
+            <p className="text-sm text-gray-700 mt-3 bg-primary-100/40 rounded-lg px-3 py-2">
+              <span className="font-medium">¿Por qué? </span>
+              {consulta.motivo_derivacion}
             </p>
           )}
           <EspecialidadesAlternativas

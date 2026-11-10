@@ -14,10 +14,14 @@ import {
 } from "../../constants";
 import { cambiarDobleFactor } from "../auth/dobleFactor.service";
 
+const REGEX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 function validarCambios(body: unknown): CambiosPerfil {
-  const { nombre, contrasena, contrasena_actual, recibir_correos } = (body ??
-    {}) as Record<string, unknown>;
+  const { nombre, correo, contrasena, contrasena_actual, recibir_correos } =
+    (body ?? {}) as Record<string, unknown>;
   const cambios: CambiosPerfil = {};
+  cambios.contrasenaActual =
+    typeof contrasena_actual === "string" ? contrasena_actual : undefined;
 
   if (nombre !== undefined) {
     if (typeof nombre !== "string") throw badRequest("El nombre no es válido");
@@ -48,8 +52,14 @@ function validarCambios(body: unknown): CambiosPerfil {
       );
     }
     cambios.contrasena = contrasena;
-    cambios.contrasenaActual =
-      typeof contrasena_actual === "string" ? contrasena_actual : undefined;
+  }
+
+  // HU-005 CA-2/CA-3: el correo se puede cambiar (pide la contraseña actual)
+  if (correo !== undefined) {
+    if (typeof correo !== "string" || !REGEX_CORREO.test(correo.trim())) {
+      throw badRequest("El correo electrónico no es válido");
+    }
+    cambios.correo = correo.trim();
   }
 
   if (recibir_correos !== undefined) {
@@ -61,11 +71,12 @@ function validarCambios(body: unknown): CambiosPerfil {
 
   if (
     cambios.nombre === undefined &&
+    cambios.correo === undefined &&
     cambios.contrasena === undefined &&
     cambios.recibirCorreos === undefined
   ) {
     throw badRequest(
-      "Envía al menos un campo para actualizar: nombre, contrasena o recibir_correos",
+      "Envía al menos un campo para actualizar: nombre, correo, contrasena o recibir_correos",
     );
   }
   return cambios;

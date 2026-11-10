@@ -25,10 +25,12 @@ interface DetalleConsultaProps {
   consulta: ConsultaDetalleAdmin
   /** En el historial de un usuario ya se sabe quién es: se omite la cabecera */
   conCabecera?: boolean
+  /** El paciente que ve su propia consulta no necesita su nombre en la cabecera */
+  mostrarPaciente?: boolean
 }
 
 /** Todo lo que pasó en una consulta, para auditoría y soporte (HU-026 CA-1) */
-export default function DetalleConsulta({ consulta, conCabecera = true }: DetalleConsultaProps) {
+export default function DetalleConsulta({ consulta, conCabecera = true, mostrarPaciente = true }: DetalleConsultaProps) {
   const preguntas = consulta.rondas.flatMap((ronda) =>
     ronda.preguntas.map((p) => ({ ...p, ronda: ronda.numero_ronda })),
   )
@@ -37,10 +39,12 @@ export default function DetalleConsulta({ consulta, conCabecera = true }: Detall
     <div className="space-y-5">
       {conCabecera && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="flex items-center gap-1.5 font-semibold text-gray-800">
-            <User className="w-4 h-4 text-gray-400" />
-            {consulta.paciente?.usuario.nombre ?? 'Anónimo'}
-          </span>
+          {mostrarPaciente && (
+            <span className="flex items-center gap-1.5 font-semibold text-gray-800">
+              <User className="w-4 h-4 text-gray-400" />
+              {consulta.paciente?.usuario.nombre ?? 'Anónimo'}
+            </span>
+          )}
           <span className="text-gray-400">{fechaHoraLegible(consulta.fecha_consulta)}</span>
           <span className="flex items-center gap-2 sm:ml-auto">
             <BadgeUrgencia nivel={consulta.nivel_urgencia} />

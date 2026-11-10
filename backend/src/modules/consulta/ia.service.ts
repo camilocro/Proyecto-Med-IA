@@ -33,6 +33,7 @@ export interface ConsultaPrevia {
   fecha: string; // 'YYYY-MM-DD'
   especialidad: string;
   nivelUrgencia: string;
+  antigua: boolean; // más de 6 meses: pesa menos (HU-014 CA-3, HU-056 CA-3)
 }
 
 export interface EntradaAnalisis {
@@ -180,6 +181,8 @@ ESPECIALIDAD:
 HISTORIAL DEL PACIENTE (si se incluye):
 - Son sus consultas anteriores en Med-IA: fecha, especialidad sugerida y urgencia. Úsalo solo como contexto.
 - Puede ayudarte a notar síntomas que se repiten, pero la especialidad y la urgencia se deciden por los síntomas ACTUALES.
+- Las marcadas "(hace más de 6 meses)" pesan menos: tenlas en cuenta solo si el problema se repite con claridad.
+- Si los síntomas actuales podrían relacionarse con una consulta anterior, menciónalo en una frase dentro de "motivoDerivacion" (por ejemplo: "Ya consultaste por algo parecido el 2026-05-10."), sin diagnosticar.
 - No asumas que el problema actual es el mismo de antes ni preguntes por consultas anteriores.
 
 IDIOMA:
@@ -222,7 +225,7 @@ function construirMensajeUsuario(entrada: EntradaAnalisis): string {
     const lineas = entrada.historial
       .map(
         (c) =>
-          `- ${c.fecha}: ${c.especialidad}, urgencia ${c.nivelUrgencia}`,
+          `- ${c.fecha}: ${c.especialidad}, urgencia ${c.nivelUrgencia}${c.antigua ? " (hace más de 6 meses)" : ""}`,
       )
       .join("\n");
     texto += `Consultas anteriores del paciente (de la más reciente a la más antigua):\n${lineas}\n\n`;

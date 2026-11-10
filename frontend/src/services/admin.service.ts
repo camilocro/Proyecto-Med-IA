@@ -25,6 +25,18 @@ export interface ConsultaReciente {
   paciente?: { usuario: { id_usuario?: number; nombre: string } } | null;
 }
 
+/** GET /admin/estadisticas/periodo (HU-032) */
+export interface EstadisticasPeriodo {
+  desde: string | null; // AAAA-MM-DD
+  hasta: string | null;
+  total: number; // todas las consultas del período
+  totalConResultado: number; // las que llegaron a una derivación (base de los porcentajes)
+  porUrgencia: { nivel: string; cantidad: number; porcentaje: number }[];
+  porEspecialidad: { nombre: string; cantidad: number; porcentaje: number }[];
+  casosComplejos: number;
+  porcentajeCasosComplejos: number;
+}
+
 /** GET /admin/consultas: una página de resultados (HU-031) */
 export interface PaginaConsultas {
   consultas: ConsultaReciente[];
@@ -228,6 +240,17 @@ export const adminService = {
   ): Promise<RankingMedicos> {
     return apiClient
       .get<ApiResponse<RankingMedicos>>("/admin/ranking-medicos", {
+        params: paramsSinVacios(fechas),
+      })
+      .then((res) => res.data.data);
+  },
+
+  /** HU-032: estadísticas del período (por defecto, el último mes) */
+  getEstadisticasPeriodo(
+    fechas: { desde?: string; hasta?: string } = {},
+  ): Promise<EstadisticasPeriodo> {
+    return apiClient
+      .get<ApiResponse<EstadisticasPeriodo>>("/admin/estadisticas/periodo", {
         params: paramsSinVacios(fechas),
       })
       .then((res) => res.data.data);

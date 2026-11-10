@@ -11,11 +11,11 @@ interface CredencialesMedicoProps {
 }
 
 /**
- * HU-018 CA-3: muestra las credenciales de acceso del médico recién registrado.
- * Hasta tener servicio de correo, el administrador se las entrega personalmente.
+ * HU-018 CA-3: las credenciales se envían al correo del médico. Igual se muestran una vez,
+ * por si el correo no llega y el administrador se las tiene que entregar en persona.
  */
 export default function CredencialesMedico({ resultado, onCerrar }: CredencialesMedicoProps) {
-  const { medico, passwordTemporal } = resultado
+  const { medico, passwordTemporal, correoEnviado } = resultado
   const [copiado, setCopiado] = useState(false)
 
   async function copiar() {
@@ -55,7 +55,10 @@ export default function CredencialesMedico({ resultado, onCerrar }: Credenciales
       </div>
 
       <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 mt-4">
-        Esta contraseña no se volverá a mostrar. Entregásela al médico y pedile que la cambie desde
+        {correoEnviado
+          ? 'También le enviamos estas credenciales a su correo. '
+          : 'No se pudo enviar el correo con las credenciales: entregáselas vos. '}
+        Esta contraseña no se volverá a mostrar; pedile al médico que la cambie desde
         &quot;Mi Perfil&quot; al ingresar.
       </p>
 
