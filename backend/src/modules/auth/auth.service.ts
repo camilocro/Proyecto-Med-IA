@@ -33,7 +33,7 @@ interface LoginInput {
 }
 
 // Datos públicos del usuario que recibe el frontend (coinciden con el tipo Usuario del cliente)
-function usuarioPublico(usuario: {
+export function usuarioPublico(usuario: {
   id_usuario: number;
   nombre: string;
   correo: string;
@@ -54,7 +54,7 @@ function usuarioPublico(usuario: {
 }
 
 /** El token incluye token_version (tv): al cerrar sesión cambia, y los tokens viejos dejan de valer (HU-003 CA-3). */
-function signToken(usuario: {
+export function signToken(usuario: {
   id_usuario: number;
   correo: string;
   rol: string;

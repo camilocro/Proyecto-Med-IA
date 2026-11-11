@@ -6,7 +6,13 @@ const USUARIO_STORAGE_KEY = "med_ia_usuario";
 
 // Endpoints donde un 401 significa "credenciales incorrectas", no "sesión expirada".
 // En estos casos el formulario debe mostrar el error sin recargar la página.
-const RUTAS_SIN_REDIRECCION = ["/auth/login", "/auth/register", "/auth/logout"];
+const RUTAS_SIN_REDIRECCION = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/logout",
+  "/auth/google",
+  "/auth/2fa",
+];
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
