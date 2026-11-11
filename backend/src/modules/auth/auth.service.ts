@@ -35,7 +35,7 @@ interface LoginInput {
 }
 
 // Datos públicos del usuario que recibe el frontend (coinciden con el tipo Usuario del cliente)
-function usuarioPublico(usuario: {
+export function usuarioPublico(usuario: {
   id_usuario: number;
   nombre: string;
   correo: string;
