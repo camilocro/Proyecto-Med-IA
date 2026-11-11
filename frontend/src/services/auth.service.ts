@@ -70,4 +70,13 @@ export const authService = {
     });
     return data.data;
   },
+
+  /** Login con Google: cambia el access_token de Supabase por la sesión de Med-IA. */
+  async loginGoogle(accessToken: string): Promise<RespuestaLogin> {
+    const { data } = await apiClient.post<{ data: RespuestaLogin }>(
+      "/auth/google",
+      { accessToken },
+    );
+    return data.data;
+  },
 };

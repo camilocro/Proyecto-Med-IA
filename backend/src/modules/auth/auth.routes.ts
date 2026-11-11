@@ -8,6 +8,7 @@ import {
   verificar,
   reenviarEnlaceVerificacion,
   verificar2FA,
+  loginGoogle,
 } from "./auth.controller";
 import { requireAuth } from "../../middleware/auth.middleware";
 
@@ -21,5 +22,6 @@ router.post("/restablecer", restablecer);
 router.post("/verificar", verificar);
 router.post("/reenviar-verificacion", reenviarEnlaceVerificacion);
 router.post("/2fa", verificar2FA);
+router.post("/google", loginGoogle);
 
 export default router;

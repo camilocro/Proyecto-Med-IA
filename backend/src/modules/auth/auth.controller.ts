@@ -24,6 +24,7 @@ import {
   MENSAJE_VERIFICACION_INVALIDA,
 } from "./verificacion.service";
 import { registrarIntentoLogin } from "./intentos.service";
+import { loginConGoogle } from "./google.service";
 
 // ─── Validaciones de entrada (HU-001 CA-3/CA-4, HU-033) ──────────────────────
 // Sin estas validaciones, un body incompleto llegaba a Prisma y respondía 500.
@@ -178,4 +179,19 @@ export async function verificar2FA(req: Request, res: Response) {
     idUsuario: resultado.usuario.id_usuario,
   });
   res.json(ok(resultado));
+}
+
+/** Login con Google: el frontend envía el access_token de Supabase y recibe el token de Med-IA. */
+export async function loginGoogle(req: Request, res: Response) {
+  const { accessToken } = (req.body ?? {}) as Record<string, unknown>;
+  if (
+    typeof accessToken !== "string" ||
+    !accessToken.trim() ||
+    accessToken.length > 4096
+  ) {
+    throw badRequest("Falta el token de Google");
+  }
+  res.json(
+    ok(await loginConGoogle(accessToken.trim(), req.ip ?? "desconocida")),
+  );
 }
