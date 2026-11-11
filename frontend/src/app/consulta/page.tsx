@@ -303,6 +303,7 @@ export default function ConsultaPage() {
                   <ResultadoTriage
                     consulta={consulta}
                     onNuevaConsulta={handleNuevaConsulta}
+                    restantes={contador?.restantes ?? null}
                   />
                 )}
               </>

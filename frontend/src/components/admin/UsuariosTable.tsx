@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { adminService, UsuarioAdmin } from "@/services/admin.service";
 import {
   Loader2,
@@ -9,6 +9,8 @@ import {
   X,
   FileSpreadsheet,
   ClipboardList,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import HistorialUsuarioModal from "./HistorialUsuarioModal";
 import { descargarCSV, fechaParaArchivo } from "@/lib/exportar";
@@ -26,6 +28,11 @@ const ROL_BADGE: Record<string, string> = {
   medico: "bg-blue-100 text-blue-700",
   paciente: "bg-gray-100 text-gray-600",
 };
+
+const USUARIOS_POR_PAGINA = 10; // HU-006 CA-4
+const MIN_CARACTERES_BUSQUEDA = 2; // HU-049 CA-1
+
+type Orden = "recientes" | "antiguos" | "nombre";
 
 /** Minúsculas y sin tildes: "José" y "jose" coinciden */
 function normalizar(texto: string): string {
@@ -49,17 +56,43 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [avisoExportacion, setAvisoExportacion] = useState<string | null>(null);
   const [historialDe, setHistorialDe] = useState<UsuarioAdmin | null>(null);
+  const [orden, setOrden] = useState<Orden>("recientes");
+  const [pagina, setPagina] = useState(1);
 
-  // Filtra en tiempo real por nombre o correo (HU-049)
+  // HU-049: filtra en tiempo real por nombre o correo desde 2 caracteres (CA-1);
+  // con menos (o al limpiar el buscador) vuelven todos, paginados (CA-4)
+  const termino = normalizar(busqueda);
+  const buscando = termino.length >= MIN_CARACTERES_BUSQUEDA;
+
   const usuariosFiltrados = useMemo(() => {
-    const termino = normalizar(busqueda);
-    if (!termino) return usuarios;
-    return usuarios.filter(
-      (u) =>
-        normalizar(u.nombre).includes(termino) ||
-        normalizar(u.correo).includes(termino),
-    );
-  }, [usuarios, busqueda]);
+    const filtrados = buscando
+      ? usuarios.filter(
+          (u) =>
+            normalizar(u.nombre).includes(termino) ||
+            normalizar(u.correo).includes(termino),
+        )
+      : usuarios;
+    // HU-006 CA-3: por fecha de registro (más reciente primero) o por nombre
+    return [...filtrados].sort((a, b) => {
+      if (orden === "nombre") return a.nombre.localeCompare(b.nombre, "es");
+      const diferencia =
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return orden === "recientes" ? diferencia : -diferencia;
+    });
+  }, [usuarios, termino, buscando, orden]);
+
+  // Al cambiar la búsqueda o el orden se vuelve a la primera página
+  useEffect(() => setPagina(1), [termino, orden]);
+
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(usuariosFiltrados.length / USUARIOS_POR_PAGINA),
+  );
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const usuariosPagina = usuariosFiltrados.slice(
+    (paginaActual - 1) * USUARIOS_POR_PAGINA,
+    paginaActual * USUARIOS_POR_PAGINA,
+  );
 
   /** HU-050: exporta lo que se ve, respetando la búsqueda activa (CA-3) */
   function exportarCSV() {
@@ -143,6 +176,16 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
             </button>
           )}
         </div>
+        <select
+          value={orden}
+          onChange={(e) => setOrden(e.target.value as Orden)}
+          aria-label="Ordenar usuarios"
+          className="input-field py-2 sm:w-auto text-sm"
+        >
+          <option value="recientes">Más recientes primero</option>
+          <option value="antiguos">Más antiguos primero</option>
+          <option value="nombre">Nombre (A-Z)</option>
+        </select>
         <p className="text-xs text-gray-400 whitespace-nowrap">
           {usuariosFiltrados.length} de {usuarios.length} usuarios
         </p>
@@ -184,6 +227,7 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
               <th className="px-6 py-3 text-left font-medium">Nombre</th>
               <th className="px-6 py-3 text-left font-medium">Correo</th>
               <th className="px-6 py-3 text-left font-medium">Rol</th>
+              <th className="px-6 py-3 text-left font-medium">Registro</th>
               <th className="px-6 py-3 text-left font-medium">Estado</th>
               <th className="px-6 py-3 text-center font-medium">Acciones</th>
             </tr>
@@ -192,14 +236,14 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
             {usuariosFiltrados.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-6 py-12 text-center text-sm text-gray-400"
                 >
-                  No hay usuarios que coincidan con &quot;{busqueda}&quot;.
+                  No se encontraron usuarios con ese criterio
                 </td>
               </tr>
             )}
-            {usuariosFiltrados.map((u) => (
+            {usuariosPagina.map((u) => (
               <tr
                 key={u.id_usuario}
                 className="hover:bg-gray-50/60 transition-colors"
@@ -219,6 +263,11 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
                   >
                     {ROL_LABEL[u.rol] ?? u.rol}
                   </span>
+                </td>
+
+                {/* Fecha de registro (HU-006 CA-1) */}
+                <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
+                  {new Date(u.created_at).toLocaleDateString("es-BO")}
                 </td>
 
                 {/* Estado */}
@@ -274,6 +323,32 @@ export default function UsuariosTable({ usuarios, onUsuariosChange }: Props) {
           </tbody>
         </table>
       </div>
+
+      {totalPaginas > 1 && (
+        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-3 text-xs text-gray-500">
+          <button
+            type="button"
+            onClick={() => setPagina(paginaActual - 1)}
+            disabled={paginaActual <= 1}
+            aria-label="Página anterior"
+            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span>
+            Página {paginaActual} de {totalPaginas}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPagina(paginaActual + 1)}
+            disabled={paginaActual >= totalPaginas}
+            aria-label="Página siguiente"
+            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {historialDe && (
         <HistorialUsuarioModal

@@ -9,6 +9,7 @@ import {
 import {
   CONFIG_KEY_DAILY_LIMIT,
   DIAS_GRAFICO_CONSULTAS,
+  PREFIJO_MOTIVO_CASO_COMPLEJO,
   MAX_LIMITE_DIARIO,
   MAX_MEDICOS_RANKING,
 } from "../../constants";
@@ -53,12 +54,16 @@ export async function getUsuarios() {
   });
 }
 
+/**
+ * HU-007: activa o desactiva una cuenta. requireAuth revisa "activo" en cada petición,
+ * así que una sesión abierta deja de valer al instante (CA-3). Queda en auditoría (CA-4).
+ */
 export async function cambiarEstadoUsuario(
   idUsuario: number,
   activo: boolean,
-  idAdmin: number,
+  auditor: Auditor,
 ) {
-  if (idUsuario === idAdmin && !activo) {
+  if (idUsuario === auditor.idAdmin && !activo) {
     throw badRequest("No puedes desactivar tu propia cuenta");
   }
 
@@ -68,11 +73,19 @@ export async function cambiarEstadoUsuario(
   // Una cuenta eliminada por su dueño no se puede reactivar desde el panel
   if (!existe || existe.eliminado_en) throw notFound("Usuario");
 
-  return prisma.usuario.update({
-    where: { id_usuario: idUsuario },
-    data: { activo },
-    select: SELECT_USUARIO_PUBLICO,
-  });
+  const [usuario] = await prisma.$transaction([
+    prisma.usuario.update({
+      where: { id_usuario: idUsuario },
+      data: { activo },
+      select: SELECT_USUARIO_PUBLICO,
+    }),
+    crearAuditoria(
+      auditor,
+      `${activo ? "activar" : "desactivar"}_usuario:${idUsuario}`,
+      true,
+    ),
+  ]);
+  return usuario;
 }
 
 export async function getConfiguracion() {
@@ -82,7 +95,12 @@ export async function getConfiguracion() {
 // Solo estas claves se pueden modificar desde el panel
 const CLAVES_CONFIGURABLES = [CONFIG_KEY_DAILY_LIMIT];
 
-export async function setConfiguracion(clave: string, valor: string) {
+/** HU-067 CA-4: el cambio queda en auditoría con el valor anterior, el nuevo y quién lo hizo. */
+export async function setConfiguracion(
+  clave: string,
+  valor: string,
+  auditor: Auditor,
+) {
   if (!CLAVES_CONFIGURABLES.includes(clave)) {
     throw badRequest(`La clave "${clave}" no se puede configurar`);
   }
@@ -97,11 +115,22 @@ export async function setConfiguracion(clave: string, valor: string) {
     }
   }
 
-  return prisma.configuracionSistema.upsert({
+  const anterior = await prisma.configuracionSistema.findUnique({
     where: { clave },
-    update: { valor },
-    create: { clave, valor },
   });
+  const [config] = await prisma.$transaction([
+    prisma.configuracionSistema.upsert({
+      where: { clave },
+      update: { valor },
+      create: { clave, valor },
+    }),
+    crearAuditoria(
+      auditor,
+      `config:${clave}:${anterior?.valor ?? "sin valor"}->${valor}`,
+      true,
+    ),
+  ]);
+  return config;
 }
 
 // ─── Estadísticas del panel (HU-032) ─────────────────────────────────────────
@@ -232,12 +261,9 @@ export interface Auditor {
   ip: string;
 }
 
-async function registrarAuditoria(
-  auditor: Auditor,
-  accion: string,
-  exitoso: boolean,
-) {
-  await prisma.auditoriaAcceso.create({
+/** Sin await: así también se puede incluir en una transacción junto al cambio que registra */
+function crearAuditoria(auditor: Auditor, accion: string, exitoso: boolean) {
+  return prisma.auditoriaAcceso.create({
     data: {
       id_usuario: auditor.idAdmin,
       accion,
@@ -245,6 +271,14 @@ async function registrarAuditoria(
       exitoso,
     },
   });
+}
+
+async function registrarAuditoria(
+  auditor: Auditor,
+  accion: string,
+  exitoso: boolean,
+) {
+  await crearAuditoria(auditor, accion, exitoso);
 }
 
 /** HU-031: lista paginada, de la más reciente a la más antigua. También la usa el Dashboard. */
@@ -401,4 +435,85 @@ export async function getRankingMedicos(
         (a, b) => b.fecha.getTime() - a.fecha.getTime(),
       ),
     }));
+}
+
+// ─── Estadísticas por período (HU-032) ────────────────────────────────────────
+
+const ORDEN_URGENCIA: NivelUrgencia[] = ["emergencia", "alto", "medio", "bajo"];
+
+const porcentaje = (parte: number, total: number) =>
+  total === 0 ? 0 : Math.round((parte / total) * 1000) / 10;
+
+/**
+ * HU-032: total de consultas del período, especialidades más frecuentes, distribución
+ * de urgencias y porcentaje de derivaciones automáticas por caso complejo.
+ * Los porcentajes se calculan sobre las consultas con resultado (las que tienen urgencia).
+ */
+export async function getEstadisticasPeriodo(fecha: RangoFechas) {
+  const enPeriodo = { fecha_consulta: fecha };
+  const conResultado = { ...enPeriodo, nivel_urgencia: { not: null } };
+
+  const [total, porUrgenciaAgrupado, porEspecialidadAgrupado, casosComplejos] =
+    await Promise.all([
+      prisma.consulta.count({ where: enPeriodo }),
+      prisma.consulta.groupBy({
+        by: ["nivel_urgencia"],
+        where: conResultado,
+        _count: { _all: true },
+      }),
+      prisma.consulta.groupBy({
+        by: ["id_especialidad_sugerida"],
+        where: { ...conResultado, id_especialidad_sugerida: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.consulta.count({
+        where: {
+          ...conResultado,
+          motivo_derivacion: { startsWith: PREFIJO_MOTIVO_CASO_COMPLEJO },
+        },
+      }),
+    ]);
+
+  const totalConResultado = porUrgenciaAgrupado.reduce(
+    (suma, g) => suma + g._count._all,
+    0,
+  );
+
+  // Se incluyen los cuatro niveles aunque alguno tenga 0, siempre en el mismo orden
+  const conteoUrgencia = new Map<NivelUrgencia | null, number>(
+    porUrgenciaAgrupado.map((g) => [g.nivel_urgencia, g._count._all]),
+  );
+  const porUrgencia = ORDEN_URGENCIA.map((nivel) => ({
+    nivel,
+    cantidad: conteoUrgencia.get(nivel) ?? 0,
+    porcentaje: porcentaje(conteoUrgencia.get(nivel) ?? 0, totalConResultado),
+  }));
+
+  const especialidades = await prisma.especialidad.findMany({
+    where: {
+      id_especialidad: {
+        in: porEspecialidadAgrupado.map((g) => g.id_especialidad_sugerida!),
+      },
+    },
+    select: { id_especialidad: true, nombre: true },
+  });
+  const nombres = new Map(
+    especialidades.map((e) => [e.id_especialidad, e.nombre]),
+  );
+  const porEspecialidad = porEspecialidadAgrupado
+    .map((g) => ({
+      nombre: nombres.get(g.id_especialidad_sugerida!) ?? "Sin nombre",
+      cantidad: g._count._all,
+      porcentaje: porcentaje(g._count._all, totalConResultado),
+    }))
+    .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+
+  return {
+    total,
+    totalConResultado,
+    porUrgencia,
+    porEspecialidad,
+    casosComplejos,
+    porcentajeCasosComplejos: porcentaje(casosComplejos, totalConResultado),
+  };
 }

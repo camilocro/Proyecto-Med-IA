@@ -5,6 +5,8 @@ import prisma from '../../config/prisma'
 import { badRequest, conflict, notFound } from '../../errors/AppError'
 import { SALT_ROUNDS, LONGITUD_PASSWORD_TEMPORAL } from '../../constants'
 import { getTodayRange, RangoFechas } from '../../shared/fechas'
+import { enviarCorreo } from '../../shared/correo'
+import { plantillaCorreo } from '../../shared/plantillaCorreo'
 
 const INCLUDE_MEDICO = {
   usuario:      { select: { nombre: true } },
@@ -202,10 +204,37 @@ export async function listarCentrosSalud() {
   })
 }
 
+/** HU-018 CA-3: envía al médico sus credenciales de acceso. Devuelve si se pudo enviar. */
+function enviarCredenciales(
+  usuario: { id_usuario: number; nombre: string; correo: string },
+  passwordTemporal: string,
+): Promise<boolean> {
+  const html = plantillaCorreo({
+    titulo: 'Tu cuenta de médico en Med-IA',
+    saludo: `Hola, ${usuario.nombre}:`,
+    parrafos: [
+      'El administrador te registró como médico en Med-IA. Estos son tus datos de acceso:',
+      'Por seguridad, cambia la contraseña temporal desde "Mi Perfil" la primera vez que ingreses.',
+    ],
+    detalles: [
+      { etiqueta: 'Correo', valor: usuario.correo },
+      { etiqueta: 'Contraseña temporal', valor: passwordTemporal },
+    ],
+    boton: { texto: 'Iniciar sesión', url: `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/login` },
+  })
+  return enviarCorreo({
+    para:      usuario.correo,
+    asunto:    'Med-IA: tus credenciales de acceso',
+    html,
+    tipo:      'credenciales_medico',
+    idUsuario: usuario.id_usuario,
+  })
+}
+
 /**
  * HU-018: crea la cuenta del médico (rol "medico") y su perfil en una sola operación.
- * Como todavía no hay servicio de correo (CA-3), la contraseña temporal se devuelve
- * una única vez para que el administrador se la entregue al médico.
+ * Las credenciales se envían por correo (CA-3) y la contraseña temporal también se devuelve
+ * una única vez, por si el correo no llega y el administrador debe entregarla en persona.
  */
 export async function crearMedico(datos: DatosNuevoMedico) {
   await validarCorreoLibre(datos.correo)
@@ -235,7 +264,8 @@ export async function crearMedico(datos: DatosNuevoMedico) {
   })
 
   const medico = await obtenerMedicoAdmin(usuario.medico!.id_medico)
-  return { medico, passwordTemporal }
+  const correoEnviado = await enviarCredenciales(usuario, passwordTemporal)
+  return { medico, passwordTemporal, correoEnviado }
 }
 
 /** HU-019: edita datos personales, de contacto y la especialidad del médico. */

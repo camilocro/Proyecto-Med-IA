@@ -49,10 +49,10 @@ model Usuario {
   verificado        Boolean    @default(false)
   intentos_fallidos Int        @default(0)
   bloqueado_hasta   DateTime?
-    token_version     Int        @default(0)     // HU-003 CA-3: cerrar sesión invalida los tokens anteriores
+  token_version     Int        @default(0)     // HU-003 CA-3: cerrar sesión invalida los tokens anteriores
   doble_factor      Boolean    @default(false) // HU-046
   recibir_correos   Boolean    @default(true)  // HU-070 CA-4
-    eliminado_en      DateTime?                  // HU-048: borrado lógico, la cuenta se oculta pero no se borra
+  eliminado_en      DateTime?                  // HU-048: cuenta eliminada y anonimizada por su dueño
   created_at        DateTime   @default(now())
   updated_at        DateTime   @updatedAt
 
@@ -124,9 +124,9 @@ model Consulta {
   nivel_urgencia           NivelUrgencia?
   tipo_derivacion          TipoDerivacion?
   motivo_derivacion        String?
-    resumen_sintomas            String?                  // HU-055
-  especialidades_alternativas Json?                    // HU-057
-  oculta_paciente             Boolean  @default(false) // HU-065
+  resumen_sintomas         String?                         // HU-055
+  especialidades_alternativas Json?                        // HU-057
+  oculta_paciente          Boolean         @default(false) // HU-065
   estado                   EstadoConsulta  @default(en_proceso)
   fecha_consulta           DateTime        @default(now())
   created_at               DateTime        @default(now())
@@ -199,7 +199,7 @@ model TokenRecuperacion {
   tipo       String   // 'verificacion_correo' | 'recuperacion_password'
   expira_en  DateTime
   usado      Boolean  @default(false)
-    intentos   Int      @default(0) // HU-046 CA-4: máximo 3 intentos del código 2FA
+  intentos   Int      @default(0) // HU-046 CA-4: máximo 3 intentos del código 2FA
   created_at DateTime @default(now())
 }
 
@@ -207,7 +207,7 @@ model NotificacionEmail {
   id           Int       @id @default(autoincrement())
   id_usuario   Int?
   id_consulta  Int?
-    tipo       String   // 'verificacion_correo' | 'recuperacion_password' | 'desafio_2fa' | 'recuperacion_2fa'
+  tipo         String    // ver TipoNotificacion en src/shared/correo.ts
   destinatario String
   enviado      Boolean   @default(false)
   fecha_envio  DateTime?

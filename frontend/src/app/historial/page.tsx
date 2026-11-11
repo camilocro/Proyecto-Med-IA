@@ -11,6 +11,10 @@ import HistorialFiltros, {
   FILTROS_VACIOS,
 } from "@/components/historial/HistorialFiltros";
 import ConfirmarDialogo from "@/components/admin/ConfirmarDialogo";
+import Modal from "@/components/admin/Modal";
+import DetalleConsulta from "@/components/admin/DetalleConsulta";
+import { ConsultaDetalleAdmin } from "@/services/admin.service";
+import { esCasoComplejo } from "@/lib/triage";
 import { descargarPDF, fechaParaArchivo, fechaHoraLegible } from "@/lib/exportar";
 import { mensajeDeError } from "@/lib/errores";
 import {
@@ -21,9 +25,44 @@ import {
   FileDown,
   Loader2,
   Trash2,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
+
+const CONSULTAS_POR_PAGINA = 10; // HU-025 CA-4
+
+/** El detalle reusa el componente del administrador: se adapta la consulta a su forma */
+function aDetalle(consulta: Consulta): ConsultaDetalleAdmin {
+  return {
+    id_consulta: consulta.id_consulta,
+    descripcion_sintomas: consulta.descripcion_sintomas,
+    nivel_urgencia: consulta.nivel_urgencia ?? null,
+    estado: consulta.estado,
+    fecha_consulta: consulta.fecha_consulta,
+    especialidad_sugerida: consulta.especialidad_sugerida ?? null,
+    paciente: null,
+    motivo_derivacion: consulta.motivo_derivacion ?? null,
+    resumen_sintomas: consulta.resumen_sintomas ?? null,
+    sintomas_extraidos: consulta.sintomas_extraidos ?? [],
+    rondas: consulta.rondas ?? [],
+    medicos_sugeridos: (consulta.medicos_sugeridos ?? []).map(({ medico }) => ({
+      medico: {
+        id_medico: medico.id_medico,
+        usuario: { nombre: medico.usuario?.nombre ?? "Médico" },
+        especialidad: { nombre: medico.especialidad?.nombre ?? "—" },
+        centro_salud: { nombre: medico.centro_salud?.nombre ?? "—" },
+      },
+    })),
+  };
+}
+
+type EstadoDetalle =
+  | { tipo: "cargando" }
+  | { tipo: "listo"; consulta: Consulta }
+  | { tipo: "error"; mensaje: string };
 
 const ETIQUETA_URGENCIA: Record<
   NivelUrgencia,
@@ -163,6 +202,9 @@ export default function HistorialPage() {
   const [eliminando, setEliminando] = useState(false);
   const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
   const [avisoEliminada, setAvisoEliminada] = useState(false);
+  const [pagina, setPagina] = useState(1);
+  // HU-025 CA-2 / HU-024 CA-3: detalle completo de una consulta (preguntas, respuestas, médicos)
+  const [detalle, setDetalle] = useState<EstadoDetalle | null>(null);
 
   useEffect(() => {
     triageService
@@ -188,6 +230,29 @@ export default function HistorialPage() {
     () => aplicarFiltros(consultas, filtros),
     [consultas, filtros],
   );
+
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(consultasFiltradas.length / CONSULTAS_POR_PAGINA),
+  );
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const consultasPagina = consultasFiltradas.slice(
+    (paginaActual - 1) * CONSULTAS_POR_PAGINA,
+    paginaActual * CONSULTAS_POR_PAGINA,
+  );
+
+  function verDetalle(idConsulta: number) {
+    setDetalle({ tipo: "cargando" });
+    triageService
+      .obtenerConsulta(idConsulta)
+      .then((consulta) => setDetalle({ tipo: "listo", consulta }))
+      .catch((err) =>
+        setDetalle({
+          tipo: "error",
+          mensaje: mensajeDeError(err, "No se pudo cargar el detalle de la consulta."),
+        }),
+      );
+  }
 
   async function handleDescargarPDF() {
     // CA-4: sin consultas no se genera un archivo vacío
@@ -287,6 +352,7 @@ export default function HistorialPage() {
                 especialidades={especialidades}
                 onChange={(nuevos) => {
                   setFiltros(nuevos);
+                  setPagina(1);
                   setAvisoPDF(null);
                 }}
               />
@@ -295,6 +361,8 @@ export default function HistorialPage() {
                 <p className="text-xs text-gray-400">
                   Mostrando {consultasFiltradas.length} de {consultas.length}{" "}
                   consultas
+                  {totalPaginas > 1 &&
+                    ` · página ${paginaActual} de ${totalPaginas}`}
                 </p>
                 {/* HU-064: descarga lo que se ve, con los filtros aplicados */}
                 <button
@@ -336,11 +404,14 @@ export default function HistorialPage() {
                 <div className="text-center py-12">
                   <SearchX className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500 font-medium">
-                    No hay consultas con esos filtros
+                    No encontramos consultas con ese filtro
                   </p>
                   <button
                     type="button"
-                    onClick={() => setFiltros(FILTROS_VACIOS)}
+                    onClick={() => {
+                      setFiltros(FILTROS_VACIOS);
+                      setPagina(1);
+                    }}
                     className="text-sm text-primary hover:underline mt-2"
                   >
                     Limpiar filtros
@@ -349,7 +420,7 @@ export default function HistorialPage() {
               )}
 
               <div className="space-y-3">
-                {consultasFiltradas.map((consulta) => {
+                {consultasPagina.map((consulta) => {
                   const urgencia = consulta.nivel_urgencia;
                   const badge = urgencia ? ETIQUETA_URGENCIA[urgencia] : null;
                   const borde = urgencia
@@ -369,14 +440,27 @@ export default function HistorialPage() {
                               {consulta.especialidad_sugerida.nombre}
                             </p>
                           )}
+                          {esCasoComplejo(consulta.motivo_derivacion) && (
+                            <p className="text-xs font-medium text-amber-700 mb-1">
+                              Derivación automática - caso complejo
+                            </p>
+                          )}
                           <p className="text-sm text-gray-500 line-clamp-2">
                             {consulta.descripcion_sintomas}
                           </p>
-                          <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-400">
-                            <Calendar className="w-3.5 h-3.5" />
-                            <span>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
+                            <span className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5" />
                               {formatearFecha(consulta.fecha_consulta)}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => verDetalle(consulta.id_consulta)}
+                              className="flex items-center gap-1 font-medium text-primary hover:underline"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Ver detalle
+                            </button>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -409,10 +493,60 @@ export default function HistorialPage() {
                   );
                 })}
               </div>
+
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-center gap-3 mt-6 text-sm text-gray-500">
+                  <button
+                    type="button"
+                    onClick={() => setPagina(paginaActual - 1)}
+                    disabled={paginaActual <= 1}
+                    aria-label="Página anterior"
+                    className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span>
+                    Página {paginaActual} de {totalPaginas}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPagina(paginaActual + 1)}
+                    disabled={paginaActual >= totalPaginas}
+                    aria-label="Página siguiente"
+                    className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
       </main>
+
+      <Modal
+        abierto={detalle !== null}
+        titulo="Detalle de la consulta"
+        ancho="amplio"
+        onCerrar={() => setDetalle(null)}
+      >
+        {detalle?.tipo === "cargando" && (
+          <p className="flex items-center justify-center gap-2 py-10 text-sm text-gray-400">
+            <Loader2 className="w-4 h-4 animate-spin" /> Cargando detalle…
+          </p>
+        )}
+        {detalle?.tipo === "error" && (
+          <p role="alert" className="flex items-center gap-2 py-6 text-sm text-red-600">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" /> {detalle.mensaje}
+          </p>
+        )}
+        {detalle?.tipo === "listo" && (
+          <DetalleConsulta
+            consulta={aDetalle(detalle.consulta)}
+            mostrarPaciente={false}
+          />
+        )}
+      </Modal>
 
       <ConfirmarDialogo
         abierto={aEliminar !== null}
