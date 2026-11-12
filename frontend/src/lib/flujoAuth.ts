@@ -57,3 +57,13 @@ export function rutaInicioPorRol(rol: RolUsuario): string {
 export function puedeHacerTriage(rol: RolUsuario | undefined): boolean {
   return rol === undefined || rol === "paciente";
 }
+/**
+ * HU-018: el médico llega desde su correo de bienvenida (/login?bienvenida=medico&correo=…).
+ * Devuelve su correo para precargarlo ('' si el enlace no lo trae), o null si no viene de ese correo.
+ */
+export function correoBienvenidaMedico(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("bienvenida") !== "medico") return null;
+  return params.get("correo") ?? "";
+}

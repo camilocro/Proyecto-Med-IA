@@ -1,234 +1,282 @@
-import { randomInt } from 'crypto'
-import bcrypt from 'bcryptjs'
-import { Prisma } from '@prisma/client'
-import prisma from '../../config/prisma'
-import { badRequest, conflict, notFound } from '../../errors/AppError'
-import { SALT_ROUNDS, LONGITUD_PASSWORD_TEMPORAL } from '../../constants'
-import { getTodayRange, RangoFechas } from '../../shared/fechas'
-import { enviarCorreo } from '../../shared/correo'
-import { plantillaCorreo } from '../../shared/plantillaCorreo'
+import { randomInt } from "crypto";
+import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
+import prisma from "../../config/prisma";
+import { badRequest, conflict, notFound } from "../../errors/AppError";
+import { SALT_ROUNDS, LONGITUD_PASSWORD_TEMPORAL } from "../../constants";
+import { getTodayRange, RangoFechas } from "../../shared/fechas";
+import { enviarCorreo } from "../../shared/correo";
+import { plantillaCorreo } from "../../shared/plantillaCorreo";
 
 const INCLUDE_MEDICO = {
-  usuario:      { select: { nombre: true } },
+  usuario: { select: { nombre: true } },
   especialidad: true,
   centro_salud: true,
-} as const
+} as const;
 
 // Vista del administrador: incluye correo y estado de la cuenta (nunca el password_hash).
 // La foto (HU-060) no se envía: el panel no la muestra y cada una pesa hasta 64 KB.
 const SELECT_MEDICO_ADMIN = {
-  id_medico:               true,
-  id_usuario:              true,
-  id_especialidad:         true,
-  id_centro_salud:         true,
+  id_medico: true,
+  id_usuario: true,
+  id_especialidad: true,
+  id_centro_salud: true,
   descripcion_profesional: true,
-  telefono_contacto:       true,
-  disponible:              true,
-  created_at:              true,
-  usuario:      { select: { id_usuario: true, nombre: true, correo: true, activo: true } },
+  telefono_contacto: true,
+  disponible: true,
+  created_at: true,
+  usuario: {
+    select: { id_usuario: true, nombre: true, correo: true, activo: true },
+  },
   especialidad: true,
   centro_salud: true,
-} satisfies Prisma.MedicoSelect
+} satisfies Prisma.MedicoSelect;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface DatosNuevoMedico {
-  nombre:                  string
-  correo:                  string
-  id_especialidad:         number
-  id_centro_salud:         number
-  descripcion_profesional: string
-  telefono_contacto:       string
+  nombre: string;
+  correo: string;
+  id_especialidad: number;
+  id_centro_salud: number;
+  descripcion_profesional: string;
+  telefono_contacto: string;
 }
 
-export type CambiosMedico = Partial<DatosNuevoMedico>
+export type CambiosMedico = Partial<DatosNuevoMedico>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Sin caracteres ambiguos (0/O, 1/l/I) para que el admin pueda dictarla sin errores
-const LETRAS  = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz'
-const DIGITOS = '23456789'
+const LETRAS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+const DIGITOS = "23456789";
 
 /** Contraseña temporal aleatoria que cumple la regla del sistema (letras y números). */
 function generarPasswordTemporal(): string {
   const caracteres = [
     LETRAS[randomInt(LETRAS.length)],
     DIGITOS[randomInt(DIGITOS.length)],
-  ]
-  const alfabeto = LETRAS + DIGITOS
+  ];
+  const alfabeto = LETRAS + DIGITOS;
   while (caracteres.length < LONGITUD_PASSWORD_TEMPORAL) {
-    caracteres.push(alfabeto[randomInt(alfabeto.length)])
+    caracteres.push(alfabeto[randomInt(alfabeto.length)]);
   }
   // Mezcla Fisher-Yates para que la letra y el dígito garantizados no queden siempre al inicio
   for (let i = caracteres.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1)
-    ;[caracteres[i], caracteres[j]] = [caracteres[j], caracteres[i]]
+    const j = randomInt(i + 1);
+    [caracteres[i], caracteres[j]] = [caracteres[j], caracteres[i]];
   }
-  return caracteres.join('')
+  return caracteres.join("");
 }
 
 async function obtenerMedicoAdmin(idMedico: number) {
   const medico = await prisma.medico.findUnique({
-    where:  { id_medico: idMedico },
+    where: { id_medico: idMedico },
     select: SELECT_MEDICO_ADMIN,
-  })
-  if (!medico) throw notFound('Médico')
-  return medico
+  });
+  if (!medico) throw notFound("Médico");
+  return medico;
 }
 
 async function validarEspecialidadActiva(idEspecialidad: number) {
-  const especialidad = await prisma.especialidad.findUnique({ where: { id_especialidad: idEspecialidad } })
+  const especialidad = await prisma.especialidad.findUnique({
+    where: { id_especialidad: idEspecialidad },
+  });
   if (!especialidad || !especialidad.activo) {
-    throw badRequest('La especialidad seleccionada no existe o está desactivada')
+    throw badRequest(
+      "La especialidad seleccionada no existe o está desactivada",
+    );
   }
 }
 
 async function validarCentroActivo(idCentro: number) {
-  const centro = await prisma.centroSalud.findUnique({ where: { id_centro_salud: idCentro } })
+  const centro = await prisma.centroSalud.findUnique({
+    where: { id_centro_salud: idCentro },
+  });
   if (!centro || !centro.activo) {
-    throw badRequest('El centro de salud seleccionado no existe o está desactivado')
+    throw badRequest(
+      "El centro de salud seleccionado no existe o está desactivado",
+    );
   }
 }
 
 async function validarCorreoLibre(correo: string, idUsuarioActual?: number) {
-  const existente = await prisma.usuario.findUnique({ where: { correo } })
+  const existente = await prisma.usuario.findUnique({ where: { correo } });
   if (existente && existente.id_usuario !== idUsuarioActual) {
-    throw conflict('Ya existe una cuenta registrada con ese correo')
+    throw conflict("Ya existe una cuenta registrada con ese correo");
   }
 }
 
 // ─── Consultas públicas y del propio médico ───────────────────────────────────
 
 export interface CambiosPerfilMedico {
-  descripcion_profesional?: string
-  telefono_contacto?:       string
+  descripcion_profesional?: string;
+  telefono_contacto?: string;
 }
 
 export async function getMedicosPorEspecialidad(idEspecialidad: number) {
   return prisma.medico.findMany({
     // Una cuenta desactivada no debe ofrecerse aunque haya quedado marcada como disponible
-    where:   { id_especialidad: idEspecialidad, disponible: true, usuario: { activo: true } },
+    where: {
+      id_especialidad: idEspecialidad,
+      disponible: true,
+      usuario: { activo: true },
+    },
     include: INCLUDE_MEDICO,
-  })
+  });
 }
 
 /** HU-059: detalle público de un médico. Solo médicos con la cuenta activa. */
 export async function getDetalleMedico(idMedico: number) {
   const medico = await prisma.medico.findFirst({
-    where:   { id_medico: idMedico, usuario: { activo: true } },
+    where: { id_medico: idMedico, usuario: { activo: true } },
     include: INCLUDE_MEDICO,
-  })
-  if (!medico) throw notFound('Médico')
-  return medico
+  });
+  if (!medico) throw notFound("Médico");
+  return medico;
 }
 
 export async function getPerfilMedico(idUsuario: number) {
   const medico = await prisma.medico.findUnique({
-    where:   { id_usuario: idUsuario },
+    where: { id_usuario: idUsuario },
     include: INCLUDE_MEDICO,
-  })
-  if (!medico) throw notFound('Perfil de médico')
-  return medico
+  });
+  if (!medico) throw notFound("Perfil de médico");
+  return medico;
 }
 
 /** HU-041: el médico solo edita su descripción y su teléfono; la especialidad la asigna el administrador. */
-export async function actualizarPerfilMedico(idUsuario: number, cambios: CambiosPerfilMedico) {
-  await getPerfilMedico(idUsuario) // 404 claro si la cuenta no tiene perfil de médico
+export async function actualizarPerfilMedico(
+  idUsuario: number,
+  cambios: CambiosPerfilMedico,
+) {
+  await getPerfilMedico(idUsuario); // 404 claro si la cuenta no tiene perfil de médico
   return prisma.medico.update({
-    where:   { id_usuario: idUsuario },
-    data:    cambios,
+    where: { id_usuario: idUsuario },
+    data: cambios,
     include: INCLUDE_MEDICO,
-  })
+  });
 }
 
 /** HU-042: un médico no disponible deja de aparecer en las sugerencias del triage (RN-005). */
-export async function cambiarDisponibilidad(idUsuario: number, disponible: boolean) {
-  await getPerfilMedico(idUsuario)
+export async function cambiarDisponibilidad(
+  idUsuario: number,
+  disponible: boolean,
+) {
+  await getPerfilMedico(idUsuario);
   return prisma.medico.update({
-    where:   { id_usuario: idUsuario },
-    data:    { disponible },
+    where: { id_usuario: idUsuario },
+    data: { disponible },
     include: INCLUDE_MEDICO,
-  })
+  });
 }
 
 /** HU-060: guarda la foto ya recortada (data URL) o la quita con `null` */
-export async function actualizarFotoMedico(idUsuario: number, fotoUrl: string | null) {
-  await getPerfilMedico(idUsuario)
+export async function actualizarFotoMedico(
+  idUsuario: number,
+  fotoUrl: string | null,
+) {
+  await getPerfilMedico(idUsuario);
   return prisma.medico.update({
-    where:   { id_usuario: idUsuario },
-    data:    { foto_url: fotoUrl },
+    where: { id_usuario: idUsuario },
+    data: { foto_url: fotoUrl },
     include: INCLUDE_MEDICO,
-  })
+  });
 }
 
 /** HU-061: cuántas veces fue sugerido en el período, y el mes actual frente al anterior (CA-4) */
-export async function getEstadisticasMedico(idUsuario: number, periodo: RangoFechas) {
+export async function getEstadisticasMedico(
+  idUsuario: number,
+  periodo: RangoFechas,
+) {
   const medico = await prisma.medico.findUnique({
-    where:  { id_usuario: idUsuario },
+    where: { id_usuario: idUsuario },
     select: { id_medico: true },
-  })
-  if (!medico) throw notFound('Perfil de médico')
+  });
+  if (!medico) throw notFound("Perfil de médico");
 
-  const { start: hoy, end: manana } = getTodayRange()
-  const inicioMes         = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
-  const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1) // enero → diciembre del año anterior
+  const { start: hoy, end: manana } = getTodayRange();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1); // enero → diciembre del año anterior
 
   const contar = (fecha: RangoFechas) =>
     prisma.medicoSugerido.count({
-      where: { id_medico: medico.id_medico, consulta: { fecha_consulta: fecha } },
-    })
+      where: {
+        id_medico: medico.id_medico,
+        consulta: { fecha_consulta: fecha },
+      },
+    });
 
   const [total, mesActual, mesAnterior] = await Promise.all([
     contar(periodo),
     contar({ gte: inicioMes, lt: manana }),
     contar({ gte: inicioMesAnterior, lt: inicioMes }),
-  ])
+  ]);
 
-  return { total, mesActual, mesAnterior }
+  return { total, mesActual, mesAnterior };
 }
 
 // ─── Gestión por el administrador (HU-018 a HU-021) ───────────────────────────
 
 export async function listarMedicos() {
   return prisma.medico.findMany({
-    select:  SELECT_MEDICO_ADMIN,
-    orderBy: { usuario: { nombre: 'asc' } },
-  })
+    select: SELECT_MEDICO_ADMIN,
+    orderBy: { usuario: { nombre: "asc" } },
+  });
 }
 
 export async function listarCentrosSalud() {
   return prisma.centroSalud.findMany({
-    where:   { activo: true },
-    orderBy: { nombre: 'asc' },
-    select:  { id_centro_salud: true, nombre: true, direccion: true, zona: true },
-  })
+    where: { activo: true },
+    orderBy: { nombre: "asc" },
+    select: {
+      id_centro_salud: true,
+      nombre: true,
+      direccion: true,
+      zona: true,
+    },
+  });
 }
 
-/** HU-018 CA-3: envía al médico sus credenciales de acceso. Devuelve si se pudo enviar. */
+/**
+ * HU-018 CA-3: correo de bienvenida al médico con sus datos de acceso. Devuelve si se pudo enviar.
+ * El botón abre el login con un mensaje para médicos y su correo ya cargado.
+ */
 function enviarCredenciales(
   usuario: { id_usuario: number; nombre: string; correo: string },
   passwordTemporal: string,
+  perfil: { especialidad: string; centro: string },
 ): Promise<boolean> {
+  const urlFrontend = process.env.FRONTEND_URL ?? "http://localhost:3000";
+  const enlace = `${urlFrontend}/login?bienvenida=medico&correo=${encodeURIComponent(usuario.correo)}`;
+
   const html = plantillaCorreo({
-    titulo: 'Tu cuenta de médico en Med-IA',
+    titulo: "¡Bienvenido a Med-IA!",
     saludo: `Hola, ${usuario.nombre}:`,
     parrafos: [
-      'El administrador te registró como médico en Med-IA. Estos son tus datos de acceso:',
-      'Por seguridad, cambia la contraseña temporal desde "Mi Perfil" la primera vez que ingreses.',
+      "Un administrador de Med-IA creó tu cuenta de médico. Desde ahora, los pacientes que usen el triage podrán verte entre los especialistas sugeridos.",
+      "En tu panel vas a poder completar tu perfil y tu foto, indicar si estás disponible y ver cuántas derivaciones recibiste.",
+      'Para entrar, abre el botón de abajo e inicia sesión con tu correo y la contraseña temporal. Si tu correo es de Google, también puedes usar "Continuar con Google".',
     ],
     detalles: [
-      { etiqueta: 'Correo', valor: usuario.correo },
-      { etiqueta: 'Contraseña temporal', valor: passwordTemporal },
+      { etiqueta: "Rol", valor: "Médico" },
+      { etiqueta: "Especialidad", valor: perfil.especialidad },
+      { etiqueta: "Centro de salud", valor: perfil.centro },
+      { etiqueta: "Correo", valor: usuario.correo },
+      { etiqueta: "Contraseña temporal", valor: passwordTemporal },
     ],
-    boton: { texto: 'Iniciar sesión', url: `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/login` },
-  })
+    boton: { texto: "Entrar a Med-IA", url: enlace },
+    aviso:
+      'Por seguridad, cambia la contraseña temporal desde "Mi perfil" la primera vez que ingreses.',
+    nota: "Si no esperabas este correo, ignóralo o avísale al administrador de Med-IA.",
+  });
   return enviarCorreo({
-    para:      usuario.correo,
-    asunto:    'Med-IA: tus credenciales de acceso',
+    para: usuario.correo,
+    asunto: "Bienvenido a Med-IA: tu cuenta de médico está lista",
     html,
-    tipo:      'credenciales_medico',
+    tipo: "credenciales_medico",
     idUsuario: usuario.id_usuario,
-  })
+  });
 }
 
 /**
@@ -237,59 +285,68 @@ function enviarCredenciales(
  * una única vez, por si el correo no llega y el administrador debe entregarla en persona.
  */
 export async function crearMedico(datos: DatosNuevoMedico) {
-  await validarCorreoLibre(datos.correo)
-  await validarEspecialidadActiva(datos.id_especialidad)
-  await validarCentroActivo(datos.id_centro_salud)
+  await validarCorreoLibre(datos.correo);
+  await validarEspecialidadActiva(datos.id_especialidad);
+  await validarCentroActivo(datos.id_centro_salud);
 
-  const passwordTemporal = generarPasswordTemporal()
-  const passwordHash     = await bcrypt.hash(passwordTemporal, SALT_ROUNDS)
+  const passwordTemporal = generarPasswordTemporal();
+  const passwordHash = await bcrypt.hash(passwordTemporal, SALT_ROUNDS);
 
   const usuario = await prisma.usuario.create({
     data: {
-      nombre:        datos.nombre,
-      correo:        datos.correo,
+      nombre: datos.nombre,
+      correo: datos.correo,
       password_hash: passwordHash,
-      rol:           'medico',
+      rol: "medico",
       medico: {
         create: {
-          id_especialidad:         datos.id_especialidad,
-          id_centro_salud:         datos.id_centro_salud,
+          id_especialidad: datos.id_especialidad,
+          id_centro_salud: datos.id_centro_salud,
           descripcion_profesional: datos.descripcion_profesional,
-          telefono_contacto:       datos.telefono_contacto,
-          disponible:              true, // CA-5: estado inicial "Disponible"
+          telefono_contacto: datos.telefono_contacto,
+          disponible: true, // CA-5: estado inicial "Disponible"
         },
       },
     },
     include: { medico: true },
-  })
+  });
 
-  const medico = await obtenerMedicoAdmin(usuario.medico!.id_medico)
-  const correoEnviado = await enviarCredenciales(usuario, passwordTemporal)
-  return { medico, passwordTemporal, correoEnviado }
+  const medico = await obtenerMedicoAdmin(usuario.medico!.id_medico);
+  const correoEnviado = await enviarCredenciales(usuario, passwordTemporal, {
+    especialidad: medico.especialidad.nombre,
+    centro: medico.centro_salud.nombre,
+  });
+  return { medico, passwordTemporal, correoEnviado };
 }
 
 /** HU-019: edita datos personales, de contacto y la especialidad del médico. */
-export async function actualizarMedico(idMedico: number, cambios: CambiosMedico) {
-  const actual = await obtenerMedicoAdmin(idMedico)
+export async function actualizarMedico(
+  idMedico: number,
+  cambios: CambiosMedico,
+) {
+  const actual = await obtenerMedicoAdmin(idMedico);
 
-  if (cambios.correo !== undefined)          await validarCorreoLibre(cambios.correo, actual.usuario.id_usuario)
-  if (cambios.id_especialidad !== undefined) await validarEspecialidadActiva(cambios.id_especialidad)
-  if (cambios.id_centro_salud !== undefined) await validarCentroActivo(cambios.id_centro_salud)
+  if (cambios.correo !== undefined)
+    await validarCorreoLibre(cambios.correo, actual.usuario.id_usuario);
+  if (cambios.id_especialidad !== undefined)
+    await validarEspecialidadActiva(cambios.id_especialidad);
+  if (cambios.id_centro_salud !== undefined)
+    await validarCentroActivo(cambios.id_centro_salud);
 
-  const { nombre, correo, ...datosMedico } = cambios
+  const { nombre, correo, ...datosMedico } = cambios;
 
   await prisma.$transaction([
     prisma.usuario.update({
       where: { id_usuario: actual.usuario.id_usuario },
-      data:  { nombre, correo },
+      data: { nombre, correo },
     }),
     prisma.medico.update({
       where: { id_medico: idMedico },
-      data:  datosMedico,
+      data: datosMedico,
     }),
-  ])
+  ]);
 
-  return obtenerMedicoAdmin(idMedico)
+  return obtenerMedicoAdmin(idMedico);
 }
 
 /**
@@ -297,18 +354,18 @@ export async function actualizarMedico(idMedico: number, cambios: CambiosMedico)
  * Reactivar lo devuelve a "Disponible" (CA-3). El historial de consultas no se toca (CA-4).
  */
 export async function cambiarEstadoMedico(idMedico: number, activo: boolean) {
-  const actual = await obtenerMedicoAdmin(idMedico)
+  const actual = await obtenerMedicoAdmin(idMedico);
 
   await prisma.$transaction([
     prisma.usuario.update({
       where: { id_usuario: actual.usuario.id_usuario },
-      data:  { activo },
+      data: { activo },
     }),
     prisma.medico.update({
       where: { id_medico: idMedico },
-      data:  { disponible: activo },
+      data: { disponible: activo },
     }),
-  ])
+  ]);
 
-  return obtenerMedicoAdmin(idMedico)
+  return obtenerMedicoAdmin(idMedico);
 }
