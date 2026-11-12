@@ -9,6 +9,7 @@ import {
   RUTA_LOGIN_TRAS_REGISTRO,
   RUTA_LOGIN_TRAS_REGISTRO_DE_VUELTA,
   vuelveTrasEliminarCuenta,
+  correoBienvenidaMedico,
   rutaInicioPorRol,
   vieneDeRegistroExitoso,
   recordarCorreoRegistrado,
@@ -228,6 +229,8 @@ export default function AuthForm({
   const [deVuelta, setDeVuelta] = useState(false);
   // HU-048: correo de una cuenta eliminada con el que intentó iniciar sesión
   const [correoEliminado, setCorreoEliminado] = useState<string | null>(null);
+  // HU-018: el médico llega desde su correo de bienvenida
+  const [bienvenidaMedico, setBienvenidaMedico] = useState(false);
 
   // Login
   const [correoLogin, setCorreoLogin] = useState("");
@@ -255,6 +258,15 @@ export default function AuthForm({
     setDeVuelta(vuelveTrasEliminarCuenta());
     setTab("login");
     const correo = consumirCorreoRegistrado();
+    if (correo) setCorreoLogin(correo);
+  }, []);
+
+  // HU-018: si llega desde el correo de bienvenida del médico, solo ve el login con su correo cargado
+  useEffect(() => {
+    const correo = correoBienvenidaMedico();
+    if (correo === null) return;
+    setBienvenidaMedico(true);
+    setTab("login");
     if (correo) setCorreoLogin(correo);
   }, []);
 
@@ -378,9 +390,8 @@ export default function AuthForm({
     setErroresRegistro({});
   }
 
-  const tabsVisibles: TabActiva[] = registroExitoso
-    ? ["login"]
-    : ["login", "registro"];
+  const tabsVisibles: TabActiva[] =
+    registroExitoso || bienvenidaMedico ? ["login"] : ["login", "registro"];
 
   // HU-046: segundo paso (después de todos los hooks, por eso va justo antes del render)
   if (desafio2FA) {
@@ -436,6 +447,18 @@ export default function AuthForm({
             {deVuelta
               ? "¡Qué bueno verte de vuelta! Tu cuenta anterior se eliminó, así que creamos una nueva con tu correo. Te enviamos un correo para verificarla; mientras tanto, ya podés iniciar sesión."
               : "Tu cuenta fue creada correctamente. Te enviamos un correo para verificarla. Mientras tanto, ya puedes iniciar sesión."}
+          </p>
+        </div>
+      )}
+
+      {/* HU-018: bienvenida del médico que llega desde su correo */}
+      {bienvenidaMedico && tab === "login" && (
+        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+          <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-800">
+            ¡Bienvenido a Med-IA! Tu cuenta de médico ya está lista. Iniciá
+            sesión con la contraseña temporal que te llegó por correo o con
+            Google, y después cambiala en Mi perfil.
           </p>
         </div>
       )}
@@ -713,7 +736,7 @@ export default function AuthForm({
       )}
 
       {/* Link inferior (no se ofrece registrarse otra vez tras un registro exitoso) */}
-      {!registroExitoso && (
+      {!registroExitoso && !bienvenidaMedico && (
         <p className="text-center text-sm text-gray-400 mt-6">
           {tab === "login" ? (
             <>
