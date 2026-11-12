@@ -1,6 +1,6 @@
-'use client'
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ClipboardList,
   FileSpreadsheet,
@@ -10,158 +10,231 @@ import {
   ChevronLeft,
   ChevronRight,
   SearchX,
-} from 'lucide-react'
+} from "lucide-react";
 import {
   adminService,
   ConsultaReciente,
   FiltrosConsultasAdmin,
   PaginaConsultas,
-} from '@/services/admin.service'
-import { BadgeEstado, BadgeUrgencia, ESTADO_BADGE, URGENCIA_LABEL, formatearFechaCorta } from './BadgesConsulta'
-import ConsultaDetalleModal from './ConsultaDetalleModal'
-import { descargarCSV, descargarPDF, fechaParaArchivo, fechaHoraLegible, Celda } from '@/lib/exportar'
-import { mensajeDeError } from '@/lib/errores'
+} from "@/services/admin.service";
+import {
+  BadgeEstado,
+  BadgeUrgencia,
+  ESTADO_BADGE,
+  URGENCIA_LABEL,
+  formatearFechaCorta,
+} from "./BadgesConsulta";
+import ConsultaDetalleModal from "./ConsultaDetalleModal";
+import {
+  descargarCSV,
+  descargarPDF,
+  fechaParaArchivo,
+  fechaHoraLegible,
+  Celda,
+} from "@/lib/exportar";
+import { mensajeDeError } from "@/lib/errores";
+import { EsqueletoFilas } from "@/components/ui/Esqueleto";
 
 // Mismo tope que el backend (MAX_CONSULTAS_EXPORTACION)
-const MAX_EXPORTACION = 1000
-const MENSAJE_SIN_DATOS = 'No hay consultas en el período seleccionado.'
+const MAX_EXPORTACION = 1000;
+const MENSAJE_SIN_DATOS = "No hay consultas en el período seleccionado.";
 
-type Filtros = Required<Pick<FiltrosConsultasAdmin, 'desde' | 'hasta' | 'urgencia' | 'estado'>>
-const FILTROS_VACIOS: Filtros = { desde: '', hasta: '', urgencia: '', estado: '' }
+type Filtros = Required<
+  Pick<FiltrosConsultasAdmin, "desde" | "hasta" | "urgencia" | "estado">
+>;
+const FILTROS_VACIOS: Filtros = {
+  desde: "",
+  hasta: "",
+  urgencia: "",
+  estado: "",
+};
 
-const OPCIONES_URGENCIA = ['bajo', 'medio', 'alto', 'emergencia'] as const
-const OPCIONES_ESTADO   = ['completada', 'esperando_confirmacion', 'esperando_respuestas', 'en_proceso', 'cancelada'] as const
+const OPCIONES_URGENCIA = ["bajo", "medio", "alto", "emergencia"] as const;
+const OPCIONES_ESTADO = [
+  "completada",
+  "esperando_confirmacion",
+  "esperando_respuestas",
+  "en_proceso",
+  "cancelada",
+] as const;
 
-const nombreUsuario = (c: ConsultaReciente) => c.paciente?.usuario.nombre ?? 'Anónimo'
-const textoUrgencia = (nivel: string | null) => (nivel ? URGENCIA_LABEL[nivel] ?? nivel : '—')
-const textoEstado   = (estado: string) => ESTADO_BADGE[estado]?.texto ?? estado
+const nombreUsuario = (c: ConsultaReciente) =>
+  c.paciente?.usuario.nombre ?? "Anónimo";
+const textoUrgencia = (nivel: string | null) =>
+  nivel ? (URGENCIA_LABEL[nivel] ?? nivel) : "—";
+const textoEstado = (estado: string) => ESTADO_BADGE[estado]?.texto ?? estado;
 
 /** Texto de los filtros activos, para el encabezado del PDF */
 function describirFiltros(f: Filtros): string[] {
   const periodo =
-    f.desde && f.hasta ? `Período: del ${f.desde} al ${f.hasta}`
-    : f.desde ? `Período: desde el ${f.desde}`
-    : f.hasta ? `Período: hasta el ${f.hasta}`
-    : 'Período: todas las fechas'
-  const lineas = [periodo]
-  if (f.urgencia) lineas.push(`Urgencia: ${textoUrgencia(f.urgencia)}`)
-  if (f.estado)   lineas.push(`Resultado: ${textoEstado(f.estado)}`)
-  return lineas
+    f.desde && f.hasta
+      ? `Período: del ${f.desde} al ${f.hasta}`
+      : f.desde
+        ? `Período: desde el ${f.desde}`
+        : f.hasta
+          ? `Período: hasta el ${f.hasta}`
+          : "Período: todas las fechas";
+  const lineas = [periodo];
+  if (f.urgencia) lineas.push(`Urgencia: ${textoUrgencia(f.urgencia)}`);
+  if (f.estado) lineas.push(`Resultado: ${textoEstado(f.estado)}`);
+  return lineas;
 }
 
 /** HU-068 CA-2: cantidad y porcentaje por especialidad, de mayor a menor */
 function totalesPorEspecialidad(consultas: ConsultaReciente[]): Celda[][] {
-  const conteo = new Map<string, number>()
+  const conteo = new Map<string, number>();
   for (const c of consultas) {
-    const nombre = c.especialidad_sugerida?.nombre ?? 'Sin especialidad'
-    conteo.set(nombre, (conteo.get(nombre) ?? 0) + 1)
+    const nombre = c.especialidad_sugerida?.nombre ?? "Sin especialidad";
+    conteo.set(nombre, (conteo.get(nombre) ?? 0) + 1);
   }
   const filas: Celda[][] = [...conteo]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'))
-    .map(([nombre, cantidad]) => [nombre, cantidad, `${Math.round((cantidad / consultas.length) * 100)} %`])
-  return [...filas, ['Total', consultas.length, '100 %']]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"))
+    .map(([nombre, cantidad]) => [
+      nombre,
+      cantidad,
+      `${Math.round((cantidad / consultas.length) * 100)} %`,
+    ]);
+  return [...filas, ["Total", consultas.length, "100 %"]];
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
 /** Sección "Consultas" del panel: todas las consultas con filtros, detalle y exportación */
 export default function ConsultasPanel() {
-  const [filtros,    setFiltros]    = useState<Filtros>(FILTROS_VACIOS)
-  const [pagina,     setPagina]     = useState(1)
-  const [datos,      setDatos]      = useState<PaginaConsultas | null>(null)
-  const [cargando,   setCargando]   = useState(true)
-  const [error,      setError]      = useState<string | null>(null)
-  const [exportando, setExportando] = useState<'csv' | 'pdf' | null>(null)
-  const [avisoExportacion, setAvisoExportacion] = useState<string | null>(null)
-  const [detalle,    setDetalle]    = useState<number | null>(null)
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [pagina, setPagina] = useState(1);
+  const [datos, setDatos] = useState<PaginaConsultas | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [exportando, setExportando] = useState<"csv" | "pdf" | null>(null);
+  const [avisoExportacion, setAvisoExportacion] = useState<string | null>(null);
+  const [detalle, setDetalle] = useState<number | null>(null);
 
   // Si el admin cambia los filtros rápido, solo cuenta la última respuesta
-  const ultimaPeticion = useRef(0)
+  const ultimaPeticion = useRef(0);
 
-  const rangoInvalido = Boolean(filtros.desde && filtros.hasta && filtros.desde > filtros.hasta)
+  const rangoInvalido = Boolean(
+    filtros.desde && filtros.hasta && filtros.desde > filtros.hasta,
+  );
 
   const cargar = useCallback(async () => {
-    if (rangoInvalido) return
-    const peticion = ++ultimaPeticion.current
-    setCargando(true)
-    setError(null)
+    if (rangoInvalido) return;
+    const peticion = ++ultimaPeticion.current;
+    setCargando(true);
+    setError(null);
     try {
-      const respuesta = await adminService.listarConsultas({ ...filtros, pagina })
-      if (peticion === ultimaPeticion.current) setDatos(respuesta)
+      const respuesta = await adminService.listarConsultas({
+        ...filtros,
+        pagina,
+      });
+      if (peticion === ultimaPeticion.current) setDatos(respuesta);
     } catch (err) {
       if (peticion === ultimaPeticion.current) {
-        setError(mensajeDeError(err, 'No se pudieron cargar las consultas. Intentá de nuevo.'))
+        setError(
+          mensajeDeError(
+            err,
+            "No se pudieron cargar las consultas. Intentá de nuevo.",
+          ),
+        );
       }
     } finally {
-      if (peticion === ultimaPeticion.current) setCargando(false)
+      if (peticion === ultimaPeticion.current) setCargando(false);
     }
-  }, [filtros, pagina, rangoInvalido])
+  }, [filtros, pagina, rangoInvalido]);
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
 
   function cambiarFiltro(campo: keyof Filtros, valor: string) {
-    setFiltros((prev) => ({ ...prev, [campo]: valor }))
-    setPagina(1) // con otros filtros, la página 3 puede no existir
-    setAvisoExportacion(null)
+    setFiltros((prev) => ({ ...prev, [campo]: valor }));
+    setPagina(1); // con otros filtros, la página 3 puede no existir
+    setAvisoExportacion(null);
   }
 
   function limpiarFiltros() {
-    setFiltros(FILTROS_VACIOS)
-    setPagina(1)
-    setAvisoExportacion(null)
+    setFiltros(FILTROS_VACIOS);
+    setPagina(1);
+    setAvisoExportacion(null);
   }
 
   /** HU-068: exporta todas las consultas que cumplen los filtros, no solo la página visible (CA-4) */
-  async function exportar(formato: 'csv' | 'pdf') {
-    setExportando(formato)
-    setAvisoExportacion(null)
+  async function exportar(formato: "csv" | "pdf") {
+    setExportando(formato);
+    setAvisoExportacion(null);
     try {
-      const { consultas, total } = await adminService.listarConsultas({ ...filtros, pagina: 1, porPagina: MAX_EXPORTACION })
-      const columnas = ['Fecha', 'Usuario', 'Síntomas', 'Especialidad', 'Urgencia', 'Resultado']
+      const { consultas, total } = await adminService.listarConsultas({
+        ...filtros,
+        pagina: 1,
+        porPagina: MAX_EXPORTACION,
+      });
+      const columnas = [
+        "Fecha",
+        "Usuario",
+        "Síntomas",
+        "Especialidad",
+        "Urgencia",
+        "Resultado",
+      ];
       const filas: Celda[][] = consultas.map((c) => [
         fechaHoraLegible(c.fecha_consulta),
         nombreUsuario(c),
         c.descripcion_sintomas,
-        c.especialidad_sugerida?.nombre ?? '—',
+        c.especialidad_sugerida?.nombre ?? "—",
         textoUrgencia(c.nivel_urgencia),
         textoEstado(c.estado),
-      ])
-      const nombre = `med-ia-consultas-${fechaParaArchivo()}`
+      ]);
+      const nombre = `med-ia-consultas-${fechaParaArchivo()}`;
 
-      if (formato === 'csv') {
+      if (formato === "csv") {
         // CA-3: el archivo indica que no hay datos en vez de quedar vacío
-        descargarCSV(`${nombre}.csv`, columnas, filas.length ? filas : [[MENSAJE_SIN_DATOS]])
+        descargarCSV(
+          `${nombre}.csv`,
+          columnas,
+          filas.length ? filas : [[MENSAJE_SIN_DATOS]],
+        );
       } else {
         await descargarPDF({
           nombreArchivo: `${nombre}.pdf`,
-          titulo: 'Reporte de consultas',
-          detalles: [...describirFiltros(filtros), `Total: ${total} consulta${total === 1 ? '' : 's'}`],
+          titulo: "Reporte de consultas",
+          detalles: [
+            ...describirFiltros(filtros),
+            `Total: ${total} consulta${total === 1 ? "" : "s"}`,
+          ],
           columnas,
           filas,
           mensajeVacio: MENSAJE_SIN_DATOS,
           totales: filas.length
-            ? { titulo: 'Totales por especialidad', columnas: ['Especialidad', 'Consultas', '%'], filas: totalesPorEspecialidad(consultas) }
+            ? {
+                titulo: "Totales por especialidad",
+                columnas: ["Especialidad", "Consultas", "%"],
+                filas: totalesPorEspecialidad(consultas),
+              }
             : undefined,
           horizontal: true,
-        })
+        });
       }
 
       if (total > consultas.length) {
-        setAvisoExportacion(`Se exportaron las ${consultas.length} consultas más recientes de ${total}. Acotá las fechas para incluir el resto.`)
+        setAvisoExportacion(
+          `Se exportaron las ${consultas.length} consultas más recientes de ${total}. Acotá las fechas para incluir el resto.`,
+        );
       }
     } catch (err) {
-      setAvisoExportacion(mensajeDeError(err, 'No se pudo generar el archivo. Intentá de nuevo.'))
+      setAvisoExportacion(
+        mensajeDeError(err, "No se pudo generar el archivo. Intentá de nuevo."),
+      );
     } finally {
-      setExportando(null)
+      setExportando(null);
     }
   }
 
-  const hayFiltros = Object.values(filtros).some(Boolean)
-  const total      = datos?.total ?? 0
-  const porPagina  = datos?.porPagina ?? 20
-  const totalPaginas = Math.max(1, Math.ceil(total / porPagina))
-  const primera = total === 0 ? 0 : (pagina - 1) * porPagina + 1
-  const ultima  = Math.min(pagina * porPagina, total)
+  const hayFiltros = Object.values(filtros).some(Boolean);
+  const total = datos?.total ?? 0;
+  const porPagina = datos?.porPagina ?? 20;
+  const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
+  const primera = total === 0 ? 0 : (pagina - 1) * porPagina + 1;
+  const ultima = Math.min(pagina * porPagina, total);
 
   return (
     <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -177,7 +250,7 @@ export default function ConsultasPanel() {
           )}
         </h2>
         <div className="flex gap-2">
-          {(['csv', 'pdf'] as const).map((formato) => (
+          {(["csv", "pdf"] as const).map((formato) => (
             <button
               key={formato}
               type="button"
@@ -188,7 +261,7 @@ export default function ConsultasPanel() {
             >
               {exportando === formato ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : formato === 'csv' ? (
+              ) : formato === "csv" ? (
                 <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
               ) : (
                 <FileText className="w-3.5 h-3.5 text-red-600" />
@@ -208,7 +281,7 @@ export default function ConsultasPanel() {
             type="date"
             value={filtros.desde}
             max={filtros.hasta || undefined}
-            onChange={(e) => cambiarFiltro('desde', e.target.value)}
+            onChange={(e) => cambiarFiltro("desde", e.target.value)}
             className="input-field py-2 mt-1"
           />
         </label>
@@ -219,7 +292,7 @@ export default function ConsultasPanel() {
             type="date"
             value={filtros.hasta}
             min={filtros.desde || undefined}
-            onChange={(e) => cambiarFiltro('hasta', e.target.value)}
+            onChange={(e) => cambiarFiltro("hasta", e.target.value)}
             className="input-field py-2 mt-1"
           />
         </label>
@@ -228,11 +301,15 @@ export default function ConsultasPanel() {
           <select
             id="consultas-urgencia"
             value={filtros.urgencia}
-            onChange={(e) => cambiarFiltro('urgencia', e.target.value)}
+            onChange={(e) => cambiarFiltro("urgencia", e.target.value)}
             className="input-field py-2 mt-1"
           >
             <option value="">Todas</option>
-            {OPCIONES_URGENCIA.map((u) => <option key={u} value={u}>{URGENCIA_LABEL[u]}</option>)}
+            {OPCIONES_URGENCIA.map((u) => (
+              <option key={u} value={u}>
+                {URGENCIA_LABEL[u]}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-xs text-gray-500">
@@ -240,11 +317,15 @@ export default function ConsultasPanel() {
           <select
             id="consultas-estado"
             value={filtros.estado}
-            onChange={(e) => cambiarFiltro('estado', e.target.value)}
+            onChange={(e) => cambiarFiltro("estado", e.target.value)}
             className="input-field py-2 mt-1"
           >
             <option value="">Todos</option>
-            {OPCIONES_ESTADO.map((e) => <option key={e} value={e}>{textoEstado(e)}</option>)}
+            {OPCIONES_ESTADO.map((e) => (
+              <option key={e} value={e}>
+                {textoEstado(e)}
+              </option>
+            ))}
           </select>
         </label>
         <button
@@ -258,12 +339,18 @@ export default function ConsultasPanel() {
       </div>
 
       {rangoInvalido && (
-        <p role="alert" className="px-6 py-3 text-sm text-red-600 bg-red-50 border-b border-red-100">
+        <p
+          role="alert"
+          className="px-6 py-3 text-sm text-red-600 bg-red-50 border-b border-red-100"
+        >
           La fecha &quot;Desde&quot; no puede ser posterior a &quot;Hasta&quot;.
         </p>
       )}
       {avisoExportacion && (
-        <p role="status" className="px-6 py-3 text-sm text-amber-700 bg-amber-50 border-b border-amber-100">
+        <p
+          role="status"
+          className="px-6 py-3 text-sm text-amber-700 bg-amber-50 border-b border-amber-100"
+        >
           {avisoExportacion}
         </p>
       )}
@@ -274,7 +361,13 @@ export default function ConsultasPanel() {
           <p className="flex items-center justify-center gap-2 text-sm text-red-600">
             <AlertCircle className="w-4 h-4" /> {error}
           </p>
-          <button type="button" onClick={cargar} className="btn-primary py-2 px-5 text-sm">Reintentar</button>
+          <button
+            type="button"
+            onClick={cargar}
+            className="btn-primary py-2 px-5 text-sm"
+          >
+            Reintentar
+          </button>
         </div>
       ) : cargando && !datos ? (
         <div className="py-16 flex justify-center">
@@ -284,26 +377,40 @@ export default function ConsultasPanel() {
         // CA-4: mensaje informativo cuando el filtro no encuentra nada
         <div className="py-16 text-center text-gray-400">
           <SearchX className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">{hayFiltros ? 'No hay consultas con esos filtros.' : 'Todavía no hay consultas registradas.'}</p>
+          <p className="text-sm">
+            {hayFiltros
+              ? "No hay consultas con esos filtros."
+              : "Todavía no hay consultas registradas."}
+          </p>
           {hayFiltros && (
-            <button type="button" onClick={limpiarFiltros} className="text-sm text-primary hover:underline mt-2">
+            <button
+              type="button"
+              onClick={limpiarFiltros}
+              className="text-sm text-primary hover:underline mt-2"
+            >
               Limpiar filtros
             </button>
           )}
         </div>
       ) : (
         <>
-          <div className={`relative overflow-x-auto transition-opacity ${cargando ? 'opacity-50' : ''}`}>
+          <div
+            className={`relative overflow-x-auto transition-opacity ${cargando ? "opacity-50" : ""}`}
+          >
             <table className="w-full min-w-[820px]">
               <thead className="bg-gray-50">
                 <tr className="text-xs text-gray-400 uppercase tracking-wider">
                   <th className="px-6 py-3 text-left font-medium">Fecha</th>
                   <th className="px-6 py-3 text-left font-medium">Usuario</th>
                   <th className="px-6 py-3 text-left font-medium">Síntomas</th>
-                  <th className="px-6 py-3 text-left font-medium">Especialidad</th>
+                  <th className="px-6 py-3 text-left font-medium">
+                    Especialidad
+                  </th>
                   <th className="px-6 py-3 text-left font-medium">Urgencia</th>
                   <th className="px-6 py-3 text-left font-medium">Resultado</th>
-                  <th className="px-6 py-3 text-right font-medium"><span className="sr-only">Detalle</span></th>
+                  <th className="px-6 py-3 text-right font-medium">
+                    <span className="sr-only">Detalle</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -313,20 +420,35 @@ export default function ConsultasPanel() {
                     onClick={() => setDetalle(c.id_consulta)}
                     className="hover:bg-gray-50/60 transition-colors cursor-pointer"
                   >
-                    <td className="px-6 py-4 text-xs text-gray-400 whitespace-nowrap">{formatearFechaCorta(c.fecha_consulta)}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap">{nombreUsuario(c)}</td>
+                    <td className="px-6 py-4 text-xs text-gray-400 whitespace-nowrap">
+                      {formatearFechaCorta(c.fecha_consulta)}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap">
+                      {nombreUsuario(c)}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px]">
-                      <span className="truncate block">{c.descripcion_sintomas}</span>
+                      <span className="truncate block">
+                        {c.descripcion_sintomas}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
-                      {c.especialidad_sugerida?.nombre ?? <span className="text-gray-300">—</span>}
+                      {c.especialidad_sugerida?.nombre ?? (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
-                    <td className="px-6 py-4"><BadgeUrgencia nivel={c.nivel_urgencia} /></td>
-                    <td className="px-6 py-4"><BadgeEstado estado={c.estado} /></td>
+                    <td className="px-6 py-4">
+                      <BadgeUrgencia nivel={c.nivel_urgencia} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <BadgeEstado estado={c.estado} />
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setDetalle(c.id_consulta) }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDetalle(c.id_consulta);
+                        }}
                         className="text-xs font-medium text-primary hover:underline"
                       >
                         Ver detalle
@@ -340,7 +462,9 @@ export default function ConsultasPanel() {
 
           {/* Paginación */}
           <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between gap-4 text-xs text-gray-500">
-            <span>Mostrando {primera}–{ultima} de {total}</span>
+            <span>
+              Mostrando {primera}–{ultima} de {total}
+            </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -351,7 +475,9 @@ export default function ConsultasPanel() {
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span>Página {pagina} de {totalPaginas}</span>
+              <span>
+                Página {pagina} de {totalPaginas}
+              </span>
               <button
                 type="button"
                 onClick={() => setPagina((p) => p + 1)}
@@ -366,7 +492,12 @@ export default function ConsultasPanel() {
         </>
       )}
 
-      {detalle !== null && <ConsultaDetalleModal idConsulta={detalle} onCerrar={() => setDetalle(null)} />}
+      {detalle !== null && (
+        <ConsultaDetalleModal
+          idConsulta={detalle}
+          onCerrar={() => setDetalle(null)}
+        />
+      )}
     </section>
-  )
+  );
 }

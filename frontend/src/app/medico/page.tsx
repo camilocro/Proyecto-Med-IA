@@ -1,15 +1,19 @@
-'use client'
+"use client";
 
-import React, { useCallback, useEffect, useState } from 'react'
-import Link          from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useAuth }   from '@/hooks/useAuth'
-import { medicoPanelService, PerfilMedico, CambiosPerfilMedico } from '@/services/medicoPanel.service'
-import { mensajeDeError } from '@/lib/errores'
-import Navbar from '@/components/layout/Navbar'
-import AvatarMedico from '@/components/ui/AvatarMedico'
-import FotoPerfilMedico from '@/components/medico/FotoPerfilMedico'
-import EstadisticasMedico from '@/components/medico/EstadisticasMedico'
+import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  medicoPanelService,
+  PerfilMedico,
+  CambiosPerfilMedico,
+} from "@/services/medicoPanel.service";
+import { mensajeDeError } from "@/lib/errores";
+import Navbar from "@/components/layout/Navbar";
+import AvatarMedico from "@/components/ui/AvatarMedico";
+import FotoPerfilMedico from "@/components/medico/FotoPerfilMedico";
+import EstadisticasMedico from "@/components/medico/EstadisticasMedico";
 import {
   Stethoscope,
   Building2,
@@ -22,51 +26,63 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronRight,
-} from 'lucide-react'
+} from "lucide-react";
+import { EsqueletoPagina } from "@/components/ui/Esqueleto";
 
 // Mismas reglas que valida el backend (medico.controller.ts)
-const REGEX_TELEFONO  = /^\+?[0-9\s-]+$/
-const MIN_DESCRIPCION = 10
-const MAX_DESCRIPCION = 500
-const MIN_TELEFONO    = 7
-const MAX_TELEFONO    = 15
+const REGEX_TELEFONO = /^\+?[0-9\s-]+$/;
+const MIN_DESCRIPCION = 10;
+const MAX_DESCRIPCION = 500;
+const MIN_TELEFONO = 7;
+const MAX_TELEFONO = 15;
 
-type Campo   = 'descripcion' | 'telefono'
-type Errores = Partial<Record<Campo, string>>
-type Aviso   = { tipo: 'exito' | 'error'; mensaje: string }
+type Campo = "descripcion" | "telefono";
+type Errores = Partial<Record<Campo, string>>;
+type Aviso = { tipo: "exito" | "error"; mensaje: string };
 
 function validar(descripcion: string, telefono: string): Errores {
-  const errores: Errores = {}
-  if (descripcion.length < MIN_DESCRIPCION || descripcion.length > MAX_DESCRIPCION) {
-    errores.descripcion = `La descripción debe tener entre ${MIN_DESCRIPCION} y ${MAX_DESCRIPCION} caracteres.`
+  const errores: Errores = {};
+  if (
+    descripcion.length < MIN_DESCRIPCION ||
+    descripcion.length > MAX_DESCRIPCION
+  ) {
+    errores.descripcion = `La descripción debe tener entre ${MIN_DESCRIPCION} y ${MAX_DESCRIPCION} caracteres.`;
   }
   if (telefono.length < MIN_TELEFONO || telefono.length > MAX_TELEFONO) {
-    errores.telefono = `El teléfono debe tener entre ${MIN_TELEFONO} y ${MAX_TELEFONO} caracteres.`
+    errores.telefono = `El teléfono debe tener entre ${MIN_TELEFONO} y ${MAX_TELEFONO} caracteres.`;
   } else if (!REGEX_TELEFONO.test(telefono)) {
-    errores.telefono = 'Usá solo números, espacios, guiones y "+".'
+    errores.telefono = 'Usá solo números, espacios, guiones y "+".';
   }
-  return errores
+  return errores;
 }
 
 function iniciales(nombre: string): string {
-  return nombre.split(' ').slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('')
+  return nombre
+    .split(" ")
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 // ── Piezas de la página ───────────────────────────────────────────────────────
 
 function AvisoMensaje({ aviso }: { aviso: Aviso }) {
-  const esExito = aviso.tipo === 'exito'
+  const esExito = aviso.tipo === "exito";
   return (
     <div
-      role={esExito ? 'status' : 'alert'}
+      role={esExito ? "status" : "alert"}
       className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${
-        esExito ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+        esExito ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
       }`}
     >
-      {esExito ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+      {esExito ? (
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+      ) : (
+        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+      )}
       {aviso.mensaje}
     </div>
-  )
+  );
 }
 
 function FilaDato({
@@ -74,9 +90,9 @@ function FilaDato({
   etiqueta,
   children,
 }: {
-  icono: React.ElementType
-  etiqueta: string
-  children: React.ReactNode
+  icono: React.ElementType;
+  etiqueta: string;
+  children: React.ReactNode;
 }) {
   return (
     <div className="flex items-start gap-4 py-4 border-b border-gray-50 last:border-0">
@@ -85,10 +101,12 @@ function FilaDato({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-gray-400 mb-0.5">{etiqueta}</p>
-        <div className="text-sm font-medium text-gray-800 break-words">{children}</div>
+        <div className="text-sm font-medium text-gray-800 break-words">
+          {children}
+        </div>
       </div>
     </div>
-  )
+  );
 }
 
 /** HU-042: interruptor accesible (role="switch") para la disponibilidad */
@@ -97,20 +115,20 @@ function InterruptorDisponibilidad({
   cambiando,
   onCambiar,
 }: {
-  disponible: boolean
-  cambiando:  boolean
-  onCambiar:  () => void
+  disponible: boolean;
+  cambiando: boolean;
+  onCambiar: () => void;
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <p className="text-base font-semibold text-gray-800">
-          {disponible ? 'Disponible' : 'No disponible'}
+          {disponible ? "Disponible" : "No disponible"}
         </p>
         <p className="text-sm text-gray-500 mt-0.5">
           {disponible
-            ? 'Aparecés en las sugerencias del triage para los pacientes.'
-            : 'No aparecés en las sugerencias del triage hasta que vuelvas a estar disponible.'}
+            ? "Aparecés en las sugerencias del triage para los pacientes."
+            : "No aparecés en las sugerencias del triage hasta que vuelvas a estar disponible."}
         </p>
       </div>
       <button
@@ -123,116 +141,144 @@ function InterruptorDisponibilidad({
         className={`relative inline-flex h-8 w-14 flex-shrink-0 items-center rounded-full transition-colors
                     focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
                     disabled:opacity-60 disabled:cursor-not-allowed ${
-                      disponible ? 'bg-green-500' : 'bg-gray-300'
+                      disponible ? "bg-green-500" : "bg-gray-300"
                     }`}
       >
         <span
           className={`inline-flex h-6 w-6 items-center justify-center rounded-full bg-white shadow transition-transform ${
-            disponible ? 'translate-x-7' : 'translate-x-1'
+            disponible ? "translate-x-7" : "translate-x-1"
           }`}
         >
-          {cambiando && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+          {cambiando && (
+            <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
+          )}
         </span>
       </button>
     </div>
-  )
+  );
 }
 
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function MedicoPage() {
-  const { usuario, cargando: cargandoAuth, esMedico } = useAuth()
-  const router = useRouter()
+  const { usuario, cargando: cargandoAuth, esMedico } = useAuth();
+  const router = useRouter();
 
-  const [perfil,         setPerfil]         = useState<PerfilMedico | null>(null)
-  const [cargandoPerfil, setCargandoPerfil] = useState(true)
-  const [errorPerfil,    setErrorPerfil]    = useState<string | null>(null)
+  const [perfil, setPerfil] = useState<PerfilMedico | null>(null);
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
+  const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
 
   // Disponibilidad (HU-042)
-  const [cambiandoDisponibilidad, setCambiandoDisponibilidad] = useState(false)
-  const [avisoDisponibilidad,     setAvisoDisponibilidad]     = useState<Aviso | null>(null)
+  const [cambiandoDisponibilidad, setCambiandoDisponibilidad] = useState(false);
+  const [avisoDisponibilidad, setAvisoDisponibilidad] = useState<Aviso | null>(
+    null,
+  );
 
   // Formulario de edición (HU-041)
-  const [descripcion, setDescripcion] = useState('')
-  const [telefono,    setTelefono]    = useState('')
-  const [errores,     setErrores]     = useState<Errores>({})
-  const [guardando,   setGuardando]   = useState(false)
-  const [avisoPerfil, setAvisoPerfil] = useState<Aviso | null>(null)
+  const [descripcion, setDescripcion] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [errores, setErrores] = useState<Errores>({});
+  const [guardando, setGuardando] = useState(false);
+  const [avisoPerfil, setAvisoPerfil] = useState<Aviso | null>(null);
 
   // Sin sesión → login; con otro rol → inicio
   useEffect(() => {
-    if (cargandoAuth) return
-    if (!usuario)       router.replace('/login')
-    else if (!esMedico) router.replace('/')
-  }, [cargandoAuth, usuario, esMedico, router])
+    if (cargandoAuth) return;
+    if (!usuario) router.replace("/login");
+    else if (!esMedico) router.replace("/");
+  }, [cargandoAuth, usuario, esMedico, router]);
 
   const cargarPerfil = useCallback(async () => {
-    setCargandoPerfil(true)
-    setErrorPerfil(null)
+    setCargandoPerfil(true);
+    setErrorPerfil(null);
     try {
-      const datos = await medicoPanelService.obtenerPerfil()
-      setPerfil(datos)
-      setDescripcion(datos.descripcion_profesional)
-      setTelefono(datos.telefono_contacto)
+      const datos = await medicoPanelService.obtenerPerfil();
+      setPerfil(datos);
+      setDescripcion(datos.descripcion_profesional);
+      setTelefono(datos.telefono_contacto);
     } catch (err) {
-      setErrorPerfil(mensajeDeError(err, 'No se pudo cargar tu perfil de médico. Intentá de nuevo.'))
+      setErrorPerfil(
+        mensajeDeError(
+          err,
+          "No se pudo cargar tu perfil de médico. Intentá de nuevo.",
+        ),
+      );
     } finally {
-      setCargandoPerfil(false)
+      setCargandoPerfil(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    if (!cargandoAuth && esMedico) cargarPerfil()
-  }, [cargandoAuth, esMedico, cargarPerfil])
+    if (!cargandoAuth && esMedico) cargarPerfil();
+  }, [cargandoAuth, esMedico, cargarPerfil]);
 
   async function handleCambiarDisponibilidad() {
-    if (!perfil) return
-    setCambiandoDisponibilidad(true)
-    setAvisoDisponibilidad(null)
+    if (!perfil) return;
+    setCambiandoDisponibilidad(true);
+    setAvisoDisponibilidad(null);
     try {
-      const actualizado = await medicoPanelService.cambiarDisponibilidad(!perfil.disponible)
-      setPerfil(actualizado)
+      const actualizado = await medicoPanelService.cambiarDisponibilidad(
+        !perfil.disponible,
+      );
+      setPerfil(actualizado);
     } catch (err) {
       setAvisoDisponibilidad({
-        tipo:    'error',
-        mensaje: mensajeDeError(err, 'No se pudo cambiar tu disponibilidad. Intentá de nuevo.'),
-      })
+        tipo: "error",
+        mensaje: mensajeDeError(
+          err,
+          "No se pudo cambiar tu disponibilidad. Intentá de nuevo.",
+        ),
+      });
     } finally {
-      setCambiandoDisponibilidad(false)
+      setCambiandoDisponibilidad(false);
     }
   }
 
   async function handleGuardarPerfil(e: React.FormEvent) {
-    e.preventDefault()
-    if (!perfil) return
+    e.preventDefault();
+    if (!perfil) return;
 
-    const descripcionLimpia = descripcion.trim()
-    const telefonoLimpio    = telefono.trim()
-    const nuevosErrores     = validar(descripcionLimpia, telefonoLimpio)
-    setErrores(nuevosErrores)
-    setAvisoPerfil(null)
-    if (Object.keys(nuevosErrores).length > 0) return
+    const descripcionLimpia = descripcion.trim();
+    const telefonoLimpio = telefono.trim();
+    const nuevosErrores = validar(descripcionLimpia, telefonoLimpio);
+    setErrores(nuevosErrores);
+    setAvisoPerfil(null);
+    if (Object.keys(nuevosErrores).length > 0) return;
 
     // Solo se envía lo que cambió
-    const cambios: CambiosPerfilMedico = {}
-    if (descripcionLimpia !== perfil.descripcion_profesional) cambios.descripcion_profesional = descripcionLimpia
-    if (telefonoLimpio    !== perfil.telefono_contacto)       cambios.telefono_contacto       = telefonoLimpio
+    const cambios: CambiosPerfilMedico = {};
+    if (descripcionLimpia !== perfil.descripcion_profesional)
+      cambios.descripcion_profesional = descripcionLimpia;
+    if (telefonoLimpio !== perfil.telefono_contacto)
+      cambios.telefono_contacto = telefonoLimpio;
     if (Object.keys(cambios).length === 0) {
-      setAvisoPerfil({ tipo: 'error', mensaje: 'No hay cambios para guardar.' })
-      return
+      setAvisoPerfil({
+        tipo: "error",
+        mensaje: "No hay cambios para guardar.",
+      });
+      return;
     }
 
-    setGuardando(true)
+    setGuardando(true);
     try {
-      const actualizado = await medicoPanelService.actualizarPerfil(cambios)
-      setPerfil(actualizado)
-      setDescripcion(actualizado.descripcion_profesional)
-      setTelefono(actualizado.telefono_contacto)
-      setAvisoPerfil({ tipo: 'exito', mensaje: 'Tu perfil se actualizó correctamente.' })
+      const actualizado = await medicoPanelService.actualizarPerfil(cambios);
+      setPerfil(actualizado);
+      setDescripcion(actualizado.descripcion_profesional);
+      setTelefono(actualizado.telefono_contacto);
+      setAvisoPerfil({
+        tipo: "exito",
+        mensaje: "Tu perfil se actualizó correctamente.",
+      });
     } catch (err) {
-      setAvisoPerfil({ tipo: 'error', mensaje: mensajeDeError(err, 'No se pudo guardar tu perfil. Intentá de nuevo.') })
+      setAvisoPerfil({
+        tipo: "error",
+        mensaje: mensajeDeError(
+          err,
+          "No se pudo guardar tu perfil. Intentá de nuevo.",
+        ),
+      });
     } finally {
-      setGuardando(false)
+      setGuardando(false);
     }
   }
 
@@ -241,11 +287,11 @@ export default function MedicoPage() {
     return (
       <>
         <Navbar />
-        <main className="flex-1 flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+        <main className="flex-1 min-h-[60vh]">
+          <EsqueletoPagina />
         </main>
       </>
-    )
+    );
   }
 
   if (errorPerfil || !perfil) {
@@ -254,17 +300,27 @@ export default function MedicoPage() {
         <Navbar />
         <main className="flex-1 bg-gray-50 py-10 px-4">
           <div className="max-w-3xl mx-auto space-y-4">
-            <AvisoMensaje aviso={{ tipo: 'error', mensaje: errorPerfil ?? 'No se pudo cargar tu perfil de médico.' }} />
-            <button type="button" onClick={cargarPerfil} className="btn-primary py-2.5 px-6">
+            <AvisoMensaje
+              aviso={{
+                tipo: "error",
+                mensaje:
+                  errorPerfil ?? "No se pudo cargar tu perfil de médico.",
+              }}
+            />
+            <button
+              type="button"
+              onClick={cargarPerfil}
+              className="btn-primary py-2.5 px-6"
+            >
               Reintentar
             </button>
           </div>
         </main>
       </>
-    )
+    );
   }
 
-  const { especialidad, centro_salud: centro } = perfil
+  const { especialidad, centro_salud: centro } = perfil;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -273,7 +329,6 @@ export default function MedicoPage() {
 
       <main className="flex-1 bg-gray-50 py-10 px-4">
         <div className="max-w-3xl mx-auto space-y-6">
-
           {/* ── Encabezado ── */}
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Mi Panel</h1>
@@ -290,22 +345,32 @@ export default function MedicoPage() {
                 nombre={perfil.usuario.nombre}
                 className="w-16 h-16 rounded-2xl border-2 border-white/30"
                 sinFoto={
-                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
-                                  text-white text-2xl font-bold select-none flex-shrink-0">
+                  <div
+                    className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center
+                                  text-white text-2xl font-bold select-none flex-shrink-0"
+                  >
                     {iniciales(perfil.usuario.nombre)}
                   </div>
                 }
               />
               <div className="min-w-0">
-                <h2 className="text-white text-xl font-bold break-words">{perfil.usuario.nombre}</h2>
-                <p className="text-white/70 text-sm break-words">{especialidad.nombre}</p>
+                <h2 className="text-white text-xl font-bold break-words">
+                  {perfil.usuario.nombre}
+                </h2>
+                <p className="text-white/70 text-sm break-words">
+                  {especialidad.nombre}
+                </p>
                 <span
                   className={`inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-3 py-1 rounded-full ${
-                    perfil.disponible ? 'bg-green-100 text-green-700' : 'bg-white/20 text-white'
+                    perfil.disponible
+                      ? "bg-green-100 text-green-700"
+                      : "bg-white/20 text-white"
                   }`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${perfil.disponible ? 'bg-green-500' : 'bg-white/70'}`} />
-                  {perfil.disponible ? 'Disponible' : 'No disponible'}
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${perfil.disponible ? "bg-green-500" : "bg-white/70"}`}
+                  />
+                  {perfil.disponible ? "Disponible" : "No disponible"}
                 </span>
               </div>
             </div>
@@ -314,20 +379,24 @@ export default function MedicoPage() {
               <FilaDato icono={Stethoscope} etiqueta="Especialidad">
                 {especialidad.nombre}
                 <p className="text-xs font-normal text-gray-400 mt-0.5">
-                  La asigna el administrador. Si no es correcta, comunicate con él.
+                  La asigna el administrador. Si no es correcta, comunicate con
+                  él.
                 </p>
               </FilaDato>
               <FilaDato icono={Building2} etiqueta="Centro de salud">
                 {centro.nombre}
               </FilaDato>
               <FilaDato icono={MapPin} etiqueta="Dirección">
-                {centro.direccion}{centro.zona ? ` — ${centro.zona}` : ''}
+                {centro.direccion}
+                {centro.zona ? ` — ${centro.zona}` : ""}
               </FilaDato>
               <FilaDato icono={Phone} etiqueta="Teléfono de contacto">
                 {perfil.telefono_contacto}
               </FilaDato>
               <FilaDato icono={FileText} etiqueta="Descripción profesional">
-                <span className="font-normal text-gray-700 whitespace-pre-line">{perfil.descripcion_profesional}</span>
+                <span className="font-normal text-gray-700 whitespace-pre-line">
+                  {perfil.descripcion_profesional}
+                </span>
               </FilaDato>
             </div>
           </div>
@@ -339,7 +408,9 @@ export default function MedicoPage() {
               cambiando={cambiandoDisponibilidad}
               onCambiar={handleCambiarDisponibilidad}
             />
-            {avisoDisponibilidad && <AvisoMensaje aviso={avisoDisponibilidad} />}
+            {avisoDisponibilidad && (
+              <AvisoMensaje aviso={avisoDisponibilidad} />
+            )}
           </div>
 
           {/* ── Mis derivaciones (HU-061) ── */}
@@ -355,14 +426,25 @@ export default function MedicoPage() {
                 <Pencil className="w-4 h-4 text-blue-600" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-gray-800">Editar perfil profesional</h3>
-                <p className="text-xs text-gray-400">Lo ven los pacientes en el detalle de tu perfil</p>
+                <h3 className="text-base font-semibold text-gray-800">
+                  Editar perfil profesional
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Lo ven los pacientes en el detalle de tu perfil
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleGuardarPerfil} noValidate className="space-y-4">
+            <form
+              onSubmit={handleGuardarPerfil}
+              noValidate
+              className="space-y-4"
+            >
               <div>
-                <label htmlFor="medico-descripcion" className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label
+                  htmlFor="medico-descripcion"
+                  className="block text-sm font-medium text-gray-700 mb-1.5"
+                >
                   Descripción profesional
                 </label>
                 <textarea
@@ -370,18 +452,21 @@ export default function MedicoPage() {
                   rows={4}
                   value={descripcion}
                   onChange={(e) => {
-                    setDescripcion(e.target.value)
-                    setErrores((prev) => ({ ...prev, descripcion: undefined }))
-                    setAvisoPerfil(null)
+                    setDescripcion(e.target.value);
+                    setErrores((prev) => ({ ...prev, descripcion: undefined }));
+                    setAvisoPerfil(null);
                   }}
                   maxLength={MAX_DESCRIPCION}
                   disabled={guardando}
                   placeholder="Tu experiencia y las áreas que atendés"
                   aria-invalid={Boolean(errores.descripcion)}
-                  className={`input-field resize-none ${errores.descripcion ? 'border-red-300 focus:ring-red-400' : ''}`}
+                  className={`input-field resize-none ${errores.descripcion ? "border-red-300 focus:ring-red-400" : ""}`}
                 />
                 <div className="flex justify-between gap-4 mt-1">
-                  <p role={errores.descripcion ? 'alert' : undefined} className="text-xs text-red-600">
+                  <p
+                    role={errores.descripcion ? "alert" : undefined}
+                    className="text-xs text-red-600"
+                  >
                     {errores.descripcion}
                   </p>
                   <p className="text-xs text-gray-400 flex-shrink-0">
@@ -391,7 +476,10 @@ export default function MedicoPage() {
               </div>
 
               <div>
-                <label htmlFor="medico-telefono" className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label
+                  htmlFor="medico-telefono"
+                  className="block text-sm font-medium text-gray-700 mb-1.5"
+                >
                   Teléfono de contacto
                 </label>
                 <input
@@ -399,18 +487,20 @@ export default function MedicoPage() {
                   type="tel"
                   value={telefono}
                   onChange={(e) => {
-                    setTelefono(e.target.value)
-                    setErrores((prev) => ({ ...prev, telefono: undefined }))
-                    setAvisoPerfil(null)
+                    setTelefono(e.target.value);
+                    setErrores((prev) => ({ ...prev, telefono: undefined }));
+                    setAvisoPerfil(null);
                   }}
                   maxLength={MAX_TELEFONO}
                   disabled={guardando}
                   placeholder="Ej. 70000000"
                   aria-invalid={Boolean(errores.telefono)}
-                  className={`input-field ${errores.telefono ? 'border-red-300 focus:ring-red-400' : ''}`}
+                  className={`input-field ${errores.telefono ? "border-red-300 focus:ring-red-400" : ""}`}
                 />
                 {errores.telefono && (
-                  <p role="alert" className="text-xs text-red-600 mt-1">{errores.telefono}</p>
+                  <p role="alert" className="text-xs text-red-600 mt-1">
+                    {errores.telefono}
+                  </p>
                 )}
               </div>
 
@@ -439,14 +529,17 @@ export default function MedicoPage() {
               <Lock className="w-4 h-4 text-amber-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800">Cambiar contraseña</p>
-              <p className="text-xs text-gray-400">Desde Mi Perfil, confirmando tu contraseña actual</p>
+              <p className="text-sm font-semibold text-gray-800">
+                Cambiar contraseña
+              </p>
+              <p className="text-xs text-gray-400">
+                Desde Mi Perfil, confirmando tu contraseña actual
+              </p>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
           </Link>
-
         </div>
       </main>
     </>
-  )
+  );
 }

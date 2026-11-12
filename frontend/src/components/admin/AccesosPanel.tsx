@@ -22,6 +22,7 @@ import {
 } from "@/services/admin.service";
 import { mensajeDeError } from "@/lib/errores";
 import { descargarCSV, fechaParaArchivo } from "@/lib/exportar";
+import { EsqueletoFilas } from "@/components/ui/Esqueleto";
 
 const POR_PAGINA = 25;
 const MAX_EXPORTACION = 2000; // mismo tope que el backend
@@ -107,9 +108,7 @@ function DetalleIpModal({
           <AlertCircle className="w-4 h-4" /> {error}
         </p>
       ) : !detalle ? (
-        <div className="py-10 flex justify-center">
-          <Loader2 className="w-6 h-6 text-primary animate-spin" />
-        </div>
+        <EsqueletoFilas filas={6} />
       ) : (
         <div className="space-y-5">
           <div className="grid grid-cols-3 gap-3">
@@ -457,9 +456,7 @@ export default function AccesosPanel() {
           </button>
         </div>
       ) : cargando && !datos ? (
-        <div className="py-16 flex justify-center">
-          <Loader2 className="w-6 h-6 text-primary animate-spin" />
-        </div>
+        <EsqueletoFilas filas={6} />
       ) : total === 0 ? (
         <div className="py-16 text-center text-gray-400">
           <SearchX className="w-10 h-10 mx-auto mb-3 opacity-40" />
