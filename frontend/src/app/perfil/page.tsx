@@ -26,6 +26,7 @@ import PreferenciasCorreo from "@/components/perfil/PreferenciasCorreo";
 import EliminarCuenta from "@/components/perfil/EliminarCuenta";
 import DobleFactor from "@/components/perfil/DobleFactor";
 import CambiarCorreo from "@/components/perfil/CambiarCorreo";
+import { EsqueletoPagina } from "@/components/ui/Esqueleto";
 
 // Mismas reglas que valida el backend (usuario.controller.ts)
 const MIN_LONGITUD_NOMBRE = 2;
@@ -290,8 +291,8 @@ export default function PerfilPage() {
     return (
       <>
         <Navbar />
-        <main className="flex-1 flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+        <main className="flex-1 min-h-[60vh]">
+          <EsqueletoPagina />
         </main>
       </>
     );

@@ -15,7 +15,11 @@ import Modal from "@/components/admin/Modal";
 import DetalleConsulta from "@/components/admin/DetalleConsulta";
 import { ConsultaDetalleAdmin } from "@/services/admin.service";
 import { esCasoComplejo } from "@/lib/triage";
-import { descargarPDF, fechaParaArchivo, fechaHoraLegible } from "@/lib/exportar";
+import {
+  descargarPDF,
+  fechaParaArchivo,
+  fechaHoraLegible,
+} from "@/lib/exportar";
 import { mensajeDeError } from "@/lib/errores";
 import {
   Calendar,
@@ -29,6 +33,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { EsqueletoPagina } from "@/components/ui/Esqueleto";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +92,10 @@ const ETIQUETA_ESTADO: Partial<
 > = {
   cancelada: { texto: "Cancelada", clases: "bg-red-100 text-red-700" },
   // HU-053: la IA ya tiene un resultado, pero el paciente no lo confirmó
-  esperando_confirmacion: { texto: "Por confirmar", clases: "bg-sky-100 text-sky-700" },
+  esperando_confirmacion: {
+    texto: "Por confirmar",
+    clases: "bg-sky-100 text-sky-700",
+  },
   esperando_respuestas: {
     texto: "Sin terminar",
     clases: "bg-amber-100 text-amber-700",
@@ -106,7 +114,10 @@ function formatearFecha(fechaISO: string): string {
 }
 
 /** "Sin terminar" agrupa las que esperan respuestas y las que quedaron en proceso */
-function coincideEstado(estado: EstadoConsulta, filtro: EstadoConsulta): boolean {
+function coincideEstado(
+  estado: EstadoConsulta,
+  filtro: EstadoConsulta,
+): boolean {
   if (filtro === "esperando_respuestas")
     return estado === "esperando_respuestas" || estado === "en_proceso";
   return estado === filtro;
@@ -148,7 +159,8 @@ function describirFiltros(filtros: FiltrosHistorial): string[] {
       `Período: ${filtros.desde ? `desde el ${filtros.desde}` : ""}${filtros.desde && filtros.hasta ? " " : ""}${filtros.hasta ? `hasta el ${filtros.hasta}` : ""}`,
     );
   }
-  if (filtros.especialidad) lineas.push(`Especialidad: ${filtros.especialidad}`);
+  if (filtros.especialidad)
+    lineas.push(`Especialidad: ${filtros.especialidad}`);
   if (filtros.urgencia)
     lineas.push(`Urgencia: ${ETIQUETA_URGENCIA[filtros.urgencia].texto}`);
   if (filtros.estado)
@@ -170,7 +182,13 @@ async function descargarHistorialPDF(
       ...describirFiltros(filtros),
       "Orientación preliminar generada por IA: no reemplaza el diagnóstico de un médico.",
     ],
-    columnas: ["Fecha", "Síntomas", "Especialidad", "Urgencia", "Médicos recomendados"],
+    columnas: [
+      "Fecha",
+      "Síntomas",
+      "Especialidad",
+      "Urgencia",
+      "Médicos recomendados",
+    ],
     filas: consultas.map((c) => [
       fechaHoraLegible(c.fecha_consulta),
       c.descripcion_sintomas,
@@ -249,7 +267,10 @@ export default function HistorialPage() {
       .catch((err) =>
         setDetalle({
           tipo: "error",
-          mensaje: mensajeDeError(err, "No se pudo cargar el detalle de la consulta."),
+          mensaje: mensajeDeError(
+            err,
+            "No se pudo cargar el detalle de la consulta.",
+          ),
         }),
       );
   }
@@ -279,13 +300,20 @@ export default function HistorialPage() {
       .eliminarConsulta(aEliminar.id_consulta)
       .then(() => true)
       .catch((err) => {
-        setErrorEliminar(mensajeDeError(err, "No se pudo eliminar la consulta. Intentá de nuevo."));
+        setErrorEliminar(
+          mensajeDeError(
+            err,
+            "No se pudo eliminar la consulta. Intentá de nuevo.",
+          ),
+        );
         return false;
       })
       .finally(() => setEliminando(false));
 
     if (!eliminada) return;
-    setConsultas((prev) => prev.filter((c) => c.id_consulta !== aEliminar.id_consulta));
+    setConsultas((prev) =>
+      prev.filter((c) => c.id_consulta !== aEliminar.id_consulta),
+    );
     setAEliminar(null);
     setAvisoEliminada(true);
   }
@@ -294,11 +322,8 @@ export default function HistorialPage() {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">Cargando historial...</p>
-          </div>
+        <main className="flex-1">
+          <EsqueletoPagina />
         </main>
         <Footer />
       </div>
@@ -536,7 +561,10 @@ export default function HistorialPage() {
           </p>
         )}
         {detalle?.tipo === "error" && (
-          <p role="alert" className="flex items-center gap-2 py-6 text-sm text-red-600">
+          <p
+            role="alert"
+            className="flex items-center gap-2 py-6 text-sm text-red-600"
+          >
             <AlertCircle className="w-4 h-4 flex-shrink-0" /> {detalle.mensaje}
           </p>
         )}
@@ -560,7 +588,9 @@ export default function HistorialPage() {
               </span>{" "}
               dejará de aparecer en tu historial.
             </p>
-            <p className="font-medium text-red-700">Esta acción no se puede deshacer.</p>
+            <p className="font-medium text-red-700">
+              Esta acción no se puede deshacer.
+            </p>
           </>
         }
         textoConfirmar="Eliminar"
