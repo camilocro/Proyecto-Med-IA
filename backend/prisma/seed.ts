@@ -1,6 +1,8 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { seedMedicos } from "./seed.medicos";
+import { passwordSeed } from "./seedPassword";
 
 const prisma = new PrismaClient();
 
@@ -58,7 +60,10 @@ async function seedCentroSalud() {
 }
 
 async function seedAdministrador() {
-  const passwordHash = await bcrypt.hash("Admin123!", 12);
+  const passwordHash = await bcrypt.hash(
+    passwordSeed("SEED_ADMIN_PASSWORD", "admin@med-ia.bo"),
+    12,
+  );
 
   await prisma.usuario.upsert({
     where: { correo: "admin@med-ia.bo" },
@@ -72,7 +77,7 @@ async function seedAdministrador() {
       verificado: true,
     },
   });
-  console.log("✓ Admin: admin@med-ia.bo / Admin123!");
+  console.log("✓ Admin: admin@med-ia.bo");
 }
 
 async function seedConfiguracion() {
