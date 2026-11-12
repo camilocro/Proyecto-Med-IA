@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { SALT_ROUNDS } from "../src/constants";
 
 // Solo para desarrollo: todos los médicos de prueba comparten esta contraseña
-const PASSWORD_MEDICOS_DEMO = "Medico123!";
+import { passwordSeed } from "./seedPassword";
 
 const MEDICOS_DEMO = [
   {
@@ -64,7 +64,11 @@ export async function seedMedicos(prisma: PrismaClient) {
   if (!centro)
     throw new Error("Debe existir un centro de salud antes de crear médicos");
 
-  const passwordHash = await bcrypt.hash(PASSWORD_MEDICOS_DEMO, SALT_ROUNDS);
+  // Solo desarrollo local: todos los médicos de prueba comparten esta contraseña
+  const passwordHash = await bcrypt.hash(
+    passwordSeed("SEED_MEDICOS_PASSWORD", "los médicos de prueba"),
+    SALT_ROUNDS,
+  );
 
   for (const m of MEDICOS_DEMO) {
     const especialidad = await prisma.especialidad.findUnique({
@@ -103,7 +107,5 @@ export async function seedMedicos(prisma: PrismaClient) {
     });
   }
 
-  console.log(
-    `✓ ${MEDICOS_DEMO.length} médicos de prueba (contraseña: ${PASSWORD_MEDICOS_DEMO})`,
-  );
+  console.log(`✓ ${MEDICOS_DEMO.length} médicos de prueba`);
 }

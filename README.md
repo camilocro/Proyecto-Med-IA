@@ -8,10 +8,10 @@ Proyecto de Ingeniería de Software · Universidad Católica Boliviana · 4 spri
 
 ## Tecnologías
 
-| Parte    | Stack |
-|----------|-------|
+| Parte    | Stack                                                                                   |
+| -------- | --------------------------------------------------------------------------------------- |
 | Backend  | Node.js · Express · TypeScript · Prisma 5 · PostgreSQL (Supabase) · OpenAI · Nodemailer |
-| Frontend | Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · Axios · jsPDF |
+| Frontend | Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · Axios · jsPDF          |
 
 ```
 Proyecto-Med-IA/
@@ -66,17 +66,17 @@ npm run dev                        # http://localhost:3000
 
 ### Variables de entorno del backend
 
-| Variable | Para qué |
-|----------|----------|
-| `DATABASE_URL`, `DIRECT_URL` | Conexión a PostgreSQL (Supabase → Connect → ORMs → Prisma) |
-| `JWT_SECRET`, `JWT_EXPIRES_IN` | Firma de las sesiones (una cadena larga y aleatoria) |
-| `OPENAI_API_KEY`, `OPENAI_MODEL` | Análisis de síntomas con la IA |
-| `IA_MODO_SIMULADO` | `true` = IA simulada, sin gastar créditos (útil para desarrollar y para la demo) |
-| `FRONTEND_URL` | CORS y enlaces de los correos |
-| `TRUST_PROXY` | Cantidad de proxies delante del backend: `0` en local, `1` en Render (para que las IP de Accesos sean las reales) |
-| `BREVO_API_KEY` | Envío de correos por la API de Brevo (producción: Render bloquea SMTP en el plan gratis) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Envío de correos por Gmail con contraseña de aplicación (local) |
-| `CORREO_REMITENTE` | Remitente de los correos; con Brevo debe ser el remitente verificado |
+| Variable                                           | Para qué                                                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`, `DIRECT_URL`                       | Conexión a PostgreSQL (Supabase → Connect → ORMs → Prisma)                                                        |
+| `JWT_SECRET`, `JWT_EXPIRES_IN`                     | Firma de las sesiones (una cadena larga y aleatoria)                                                              |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`                   | Análisis de síntomas con la IA                                                                                    |
+| `IA_MODO_SIMULADO`                                 | `true` = IA simulada, sin gastar créditos (útil para desarrollar y para la demo)                                  |
+| `FRONTEND_URL`                                     | CORS y enlaces de los correos                                                                                     |
+| `TRUST_PROXY`                                      | Cantidad de proxies delante del backend: `0` en local, `1` en Render (para que las IP de Accesos sean las reales) |
+| `BREVO_API_KEY`                                    | Envío de correos por la API de Brevo (producción: Render bloquea SMTP en el plan gratis)                          |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Envío de correos por Gmail con contraseña de aplicación (local)                                                   |
+| `CORREO_REMITENTE`                                 | Remitente de los correos; con Brevo debe ser el remitente verificado                                              |
 
 Los correos salen por Brevo si hay `BREVO_API_KEY`; si no, por Gmail si hay `SMTP_USER`. Si no hay
 ninguna de las dos, los correos (verificación, recuperación, código 2FA, avisos) **se imprimen en la
@@ -84,26 +84,28 @@ consola del backend** con sus enlaces: el sistema funciona igual en desarrollo.
 
 Los valores reales del `.env` se comparten solo por privado y nunca se suben al repositorio.
 
-### Cuentas de prueba (después de `npm run db:seed`)
+### Cuentas de prueba (solo en una base local, después de `npm run db:seed`)
 
-| Rol | Correo | Contraseña |
-|-----|--------|------------|
-| Administrador | `admin@med-ia.bo` | `Admin123!` |
-| Médicos | `ana.rojas@med-ia.bo`, `luis.mamani@med-ia.bo`, … | `Medico123!` |
+| Rol           | Correo                                            | Contraseña                         |
+| ------------- | ------------------------------------------------- | ---------------------------------- |
+| Administrador | `admin@med-ia.bo`                                 | `SEED_ADMIN_PASSWORD` del `.env`   |
+| Médicos       | `ana.rojas@med-ia.bo`, `luis.mamani@med-ia.bo`, … | `SEED_MEDICOS_PASSWORD` del `.env` |
 
-Cambiá estas contraseñas si la base es accesible desde internet.
+Si esas variables no están, el seed genera contraseñas aleatorias y las muestra una sola vez en la consola.
+**Nunca ejecutes el seed contra la base de producción.** En producción, las cuentas demo no tienen una
+contraseña conocida: para probar el panel del médico, el administrador crea un médico con un correo real.
 
 ## Scripts
 
-| Dónde | Comando | Qué hace |
-|-------|---------|----------|
-| backend | `npm run dev` | Servidor con recarga automática |
-| backend | `npm run build` / `npm start` | Compila a `dist/` y lo ejecuta |
-| backend | `npx tsc --noEmit` | Revisa los tipos sin compilar |
-| backend | `npx ts-node src/scripts/probarCorreo.ts <correo>` | Envía un correo de prueba |
-| backend | `npx ts-node src/scripts/probarIA.ts` | Prueba casos del análisis con la IA |
-| frontend | `npm run dev` | Aplicación en modo desarrollo |
-| frontend | `npm run build` / `npm start` | Compila y revisa tipos; sirve la versión compilada |
+| Dónde    | Comando                                            | Qué hace                                           |
+| -------- | -------------------------------------------------- | -------------------------------------------------- |
+| backend  | `npm run dev`                                      | Servidor con recarga automática                    |
+| backend  | `npm run build` / `npm start`                      | Compila a `dist/` y lo ejecuta                     |
+| backend  | `npx tsc --noEmit`                                 | Revisa los tipos sin compilar                      |
+| backend  | `npx ts-node src/scripts/probarCorreo.ts <correo>` | Envía un correo de prueba                          |
+| backend  | `npx ts-node src/scripts/probarIA.ts`              | Prueba casos del análisis con la IA                |
+| frontend | `npm run dev`                                      | Aplicación en modo desarrollo                      |
+| frontend | `npm run build` / `npm start`                      | Compila y revisa tipos; sirve la versión compilada |
 
 ## Arquitectura del backend
 
@@ -125,11 +127,11 @@ Cada módulo vive en `src/modules/<nombre>/`: `*.routes.ts` (rutas y middlewares
 
 ### Endpoints principales
 
-| Módulo | Rutas |
-|--------|-------|
-| `/auth` | `POST register, login, logout, recuperar, restablecer, verificar, reenviar-verificacion, 2fa` |
-| `/consultas` | `POST /` · `GET /:id` · `POST /:id/rondas/:idRonda/respuestas` · `PATCH /:id/respuestas/:idPr` · `POST /:id/confirmar` · `POST /:id/reiniciar` · `PATCH /:id/cancelar` · `DELETE /:id` · `GET /historial` · `GET /restantes` |
-| `/usuarios` | `GET/PATCH/DELETE /perfil` · `PATCH /perfil/doble-factor` |
-| `/medicos` | `GET /especialidad/:id` · `GET /:id` · perfil, foto, disponibilidad y estadísticas del médico · CRUD del administrador |
-| `/especialidades` | `GET /` · `POST`, `PATCH /:id`, `DELETE /:id` (administrador) |
-| `/admin` | `dashboard`, `estadisticas`, `estadisticas/periodo`, `consultas`, `ranking-medicos`, `usuarios`, `configuracion`, `accesos` |
+| Módulo            | Rutas                                                                                                                                                                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/auth`           | `POST register, login, logout, recuperar, restablecer, verificar, reenviar-verificacion, 2fa`                                                                                                                                |
+| `/consultas`      | `POST /` · `GET /:id` · `POST /:id/rondas/:idRonda/respuestas` · `PATCH /:id/respuestas/:idPr` · `POST /:id/confirmar` · `POST /:id/reiniciar` · `PATCH /:id/cancelar` · `DELETE /:id` · `GET /historial` · `GET /restantes` |
+| `/usuarios`       | `GET/PATCH/DELETE /perfil` · `PATCH /perfil/doble-factor`                                                                                                                                                                    |
+| `/medicos`        | `GET /especialidad/:id` · `GET /:id` · perfil, foto, disponibilidad y estadísticas del médico · CRUD del administrador                                                                                                       |
+| `/especialidades` | `GET /` · `POST`, `PATCH /:id`, `DELETE /:id` (administrador)                                                                                                                                                                |
+| `/admin`          | `dashboard`, `estadisticas`, `estadisticas/periodo`, `consultas`, `ranking-medicos`, `usuarios`, `configuracion`, `accesos`                                                                                                  |
