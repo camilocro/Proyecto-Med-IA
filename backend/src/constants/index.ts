@@ -21,7 +21,8 @@ export const MIN_LONGITUD_DESCRIPCION = 10;
 export const MAX_LONGITUD_DESCRIPCION = 2000;
 export const MAX_LONGITUD_SESION_ID = 100;
 export const URGENCIA_CASO_COMPLEJO = "medio" as const;
-export const PREFIJO_MOTIVO_CASO_COMPLEJO = "Derivación automática - caso complejo";
+export const PREFIJO_MOTIVO_CASO_COMPLEJO =
+  "Derivación automática - caso complejo";
 export const MOTIVO_CASO_COMPLEJO =
   `${PREFIJO_MOTIVO_CASO_COMPLEJO}: tus síntomas necesitan una evaluación presencial ` +
   "para poder aclararlos. Te recomendamos acudir a Medicina General.";
@@ -76,3 +77,11 @@ export const CANTIDAD_CODIGOS_RECUPERACION = 8;
 export const MAX_ACCESOS_POR_PAGINA = 25;
 export const MAX_ACCESOS_EXPORTACION = 2000; // tope de filas al exportar CSV
 export const MAX_ACCESOS_DETALLE_IP = 20; // últimos accesos que muestra el detalle de una IP
+// ─── Cuenta eliminada que vuelve (HU-048) ─────────────────────────────────────
+export const CODIGO_CUENTA_ELIMINADA = "CUENTA_ELIMINADA";
+export const MENSAJE_CUENTA_ELIMINADA =
+  "Esta cuenta fue eliminada. Si quieres volver, crea una cuenta nueva con este mismo correo.";
+// ─── Cuenta desactivada por el administrador (HU-007) ─────────────────────────
+export const CODIGO_CUENTA_DESACTIVADA = "CUENTA_DESACTIVADA";
+export const MENSAJE_CUENTA_DESACTIVADA =
+  "Tu cuenta fue deshabilitada por un administrador. Comunícate con el administrador para reactivarla.";

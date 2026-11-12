@@ -7,6 +7,8 @@ import { authService } from "@/services/auth.service";
 import { mensajeDeError, codigoDeError } from "@/lib/errores";
 import {
   RUTA_LOGIN_TRAS_REGISTRO,
+  RUTA_LOGIN_TRAS_REGISTRO_DE_VUELTA,
+  vuelveTrasEliminarCuenta,
   rutaInicioPorRol,
   vieneDeRegistroExitoso,
   recordarCorreoRegistrado,
@@ -222,6 +224,10 @@ export default function AuthForm({
 
   // Tras un registro exitoso solo se muestra el inicio de sesión (HU-001 CA-5)
   const [registroExitoso, setRegistroExitoso] = useState(false);
+  // HU-048: quien eliminó su cuenta y se registra de nuevo recibe una bienvenida de vuelta
+  const [deVuelta, setDeVuelta] = useState(false);
+  // HU-048: correo de una cuenta eliminada con el que intentó iniciar sesión
+  const [correoEliminado, setCorreoEliminado] = useState<string | null>(null);
 
   // Login
   const [correoLogin, setCorreoLogin] = useState("");
@@ -246,6 +252,7 @@ export default function AuthForm({
   useEffect(() => {
     if (!vieneDeRegistroExitoso()) return;
     setRegistroExitoso(true);
+    setDeVuelta(vuelveTrasEliminarCuenta());
     setTab("login");
     const correo = consumirCorreoRegistrado();
     if (correo) setCorreoLogin(correo);
@@ -297,6 +304,8 @@ export default function AuthForm({
         const sinVerificar = codigoDeError(err) === "CORREO_NO_VERIFICADO";
         setCorreoSinVerificar(sinVerificar ? correoLogin.trim() : null);
         setReenvioVerificacion("inactivo");
+        const eliminada = codigoDeError(err) === "CUENTA_ELIMINADA";
+        setCorreoEliminado(eliminada ? correoLogin.trim() : null);
         return null;
       })
       .finally(() => setCargando(false));
@@ -355,7 +364,11 @@ export default function AuthForm({
 
     // Flujo definido: la cuenta se crea y el usuario debe iniciar sesión (no se guarda sesión aquí)
     recordarCorreoRegistrado(correoNormalizado);
-    router.replace(RUTA_LOGIN_TRAS_REGISTRO);
+    router.replace(
+      resultado.deVuelta
+        ? RUTA_LOGIN_TRAS_REGISTRO_DE_VUELTA
+        : RUTA_LOGIN_TRAS_REGISTRO,
+    );
   }
 
   function cambiarTab(nuevaTab: TabActiva) {
@@ -420,8 +433,9 @@ export default function AuthForm({
         <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
           <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-green-700">
-            Tu cuenta fue creada correctamente. Te enviamos un correo para
-            verificarla. Mientras tanto, ya puedes iniciar sesión.
+            {deVuelta
+              ? "¡Qué bueno verte de vuelta! Tu cuenta anterior se eliminó, así que creamos una nueva con tu correo. Te enviamos un correo para verificarla; mientras tanto, ya podés iniciar sesión."
+              : "Tu cuenta fue creada correctamente. Te enviamos un correo para verificarla. Mientras tanto, ya puedes iniciar sesión."}
           </p>
         </div>
       )}
@@ -456,6 +470,21 @@ export default function AuthForm({
                   : "Reenviar enlace de verificación"}
               </button>
             ))}
+          {/* HU-048: la cuenta de ese correo fue eliminada: puede crear una nueva */}
+          {correoEliminado && tab === "login" && !registroExitoso && (
+            <button
+              type="button"
+              onClick={() => {
+                const correo = correoEliminado;
+                cambiarTab("registro");
+                setCorreoReg(correo);
+                setCorreoEliminado(null);
+              }}
+              className="ml-6 text-sm font-medium text-red-700 underline"
+            >
+              Crear una cuenta nueva con este correo
+            </button>
+          )}
         </div>
       )}
 

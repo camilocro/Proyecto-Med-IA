@@ -22,6 +22,13 @@ import {
 import { iniciarDesafio2FA, verificarDesafio2FA } from "./dobleFactor.service";
 import { enviarCorreo } from "../../shared/correo";
 import { plantillaCorreo } from "../../shared/plantillaCorreo";
+import { fueCuentaEliminada } from "../../shared/huellaCorreo";
+import {
+  CODIGO_CUENTA_ELIMINADA,
+  MENSAJE_CUENTA_ELIMINADA,
+  CODIGO_CUENTA_DESACTIVADA,
+  MENSAJE_CUENTA_DESACTIVADA,
+} from "../../constants";
 
 interface RegisterInput {
   nombre: string;
@@ -85,7 +92,10 @@ export async function invalidarSesiones(idUsuario: number): Promise<void> {
 }
 
 function mensajeBloqueo(hasta: Date): string {
-  const minutos = Math.max(1, Math.ceil((hasta.getTime() - Date.now()) / 60_000));
+  const minutos = Math.max(
+    1,
+    Math.ceil((hasta.getTime() - Date.now()) / 60_000),
+  );
   return `Por seguridad bloqueamos tu cuenta por demasiados intentos fallidos. Podrás intentarlo de nuevo en ${minutos} ${minutos === 1 ? "minuto" : "minutos"}.`;
 }
 
@@ -122,6 +132,8 @@ export async function registerUsuario(input: RegisterInput) {
   });
   if (existente) throw conflict("El correo ya está registrado");
 
+  // HU-048: si el correo fue de una cuenta eliminada, el frontend le da la bienvenida de vuelta
+  const deVuelta = await fueCuentaEliminada(input.correo);
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
   // Usuario y perfil de paciente se crean juntos: si falla uno, no queda un usuario huérfano
@@ -142,16 +154,24 @@ export async function registerUsuario(input: RegisterInput) {
     ),
   );
   const token = signToken(usuario);
-  return { token, usuario: usuarioPublico(usuario) };
+  return { token, usuario: usuarioPublico(usuario), deVuelta };
 }
 
 export async function loginUsuario(input: LoginInput) {
   const usuario = await prisma.usuario.findUnique({
     where: { correo: input.correo },
   });
-  // HU-048: una cuenta eliminada responde igual que una que no existe
-  if (!usuario || usuario.eliminado_en)
+  if (!usuario || usuario.eliminado_en) {
+    // HU-048: si el correo fue de una cuenta eliminada, se le explica cómo volver
+    if (await fueCuentaEliminada(input.correo)) {
+      throw new AppError(
+        MENSAJE_CUENTA_ELIMINADA,
+        401,
+        CODIGO_CUENTA_ELIMINADA,
+      );
+    }
     throw unauthorized("Credenciales inválidas");
+  }
 
   const ahora = new Date();
   // HU-045 CA-3: el aviso indica cuánto falta para que termine el bloqueo
@@ -192,8 +212,10 @@ export async function loginUsuario(input: LoginInput) {
 
   // HU-002 CA-5: con credenciales correctas, una cuenta desactivada recibe un aviso específico
   if (!usuario.activo) {
-    throw forbidden(
-      "Tu cuenta está desactivada. Comunícate con el administrador para reactivarla.",
+    throw new AppError(
+      MENSAJE_CUENTA_DESACTIVADA,
+      403,
+      CODIGO_CUENTA_DESACTIVADA,
     );
   }
 

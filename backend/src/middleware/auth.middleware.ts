@@ -1,8 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "../config/prisma";
-import { unauthorized, forbidden } from "../errors/AppError";
+import { AppError, unauthorized, forbidden } from "../errors/AppError";
 import { AuthenticatedRequest } from "../shared/types";
+import {
+  CODIGO_CUENTA_DESACTIVADA,
+  MENSAJE_CUENTA_DESACTIVADA,
+} from "../constants";
 
 interface JwtPayload {
   id_usuario: number;
@@ -30,25 +34,33 @@ function verifyToken(token: string): JwtPayload | null {
   }
 }
 
-const MENSAJE_CUENTA_DESACTIVADA =
-  "Tu cuenta fue desactivada. Comunícate con el administrador.";
 const MENSAJE_SESION_CERRADA =
   "Tu sesión ya no es válida. Inicia sesión de nuevo.";
 
 /**
  * Un JWT sigue siendo válido hasta que vence, así que además se revisa en la base:
- * - HU-007 CA-3 / HU-020: que la cuenta siga activa.
+ * - HU-007 CA-3 / HU-020: que la cuenta siga activa. Si un administrador la desactivó,
+ *   se responde 403 con el código CUENTA_DESACTIVADA para que el frontend muestre su pantalla.
+ * - HU-048: una cuenta eliminada ya no tiene sesión.
  * - HU-003 CA-3: que el token no sea de una sesión ya cerrada (token_version distinta).
- * Devuelve el motivo del rechazo, o null si la sesión es válida.
+ * Devuelve el error a responder, o null si la sesión es válida.
  */
-async function validarSesion(payload: JwtPayload): Promise<string | null> {
+async function validarSesion(payload: JwtPayload): Promise<AppError | null> {
   const usuario = await prisma.usuario.findUnique({
     where: { id_usuario: payload.id_usuario },
-    select: { activo: true, token_version: true },
+    select: { activo: true, token_version: true, eliminado_en: true },
   });
-  if (!usuario || !usuario.activo) return MENSAJE_CUENTA_DESACTIVADA;
+  if (!usuario || usuario.eliminado_en)
+    return unauthorized(MENSAJE_SESION_CERRADA);
+  if (!usuario.activo) {
+    return new AppError(
+      MENSAJE_CUENTA_DESACTIVADA,
+      403,
+      CODIGO_CUENTA_DESACTIVADA,
+    );
+  }
   if ((payload.tv ?? 0) !== usuario.token_version)
-    return MENSAJE_SESION_CERRADA;
+    return unauthorized(MENSAJE_SESION_CERRADA);
   return null;
 }
 
@@ -68,8 +80,8 @@ export async function requireAuth(
   if (!payload) return next(unauthorized("Token inválido o expirado"));
 
   // Si la base de datos falla, express-async-errors pasa el error al middleware central
-  const motivo = await validarSesion(payload);
-  if (motivo) return next(unauthorized(motivo));
+  const rechazo = await validarSesion(payload);
+  if (rechazo) return next(rechazo);
   (req as AuthenticatedRequest).usuario = payload;
   next();
 }
@@ -89,8 +101,8 @@ export async function optionalAuth(
   if (token) {
     const payload = verifyToken(token);
     if (payload) {
-      const motivo = await validarSesion(payload);
-      if (motivo) return next(unauthorized(motivo));
+      const rechazo = await validarSesion(payload);
+      if (rechazo) return next(rechazo);
       (req as AuthenticatedRequest).usuario = payload;
     }
   }

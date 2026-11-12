@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, PartyPopper } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { authService, Desafio2FA } from "@/services/auth.service";
 import { useAuth } from "@/hooks/useAuth";
 import { mensajeDeError } from "@/lib/errores";
 import { rutaInicioPorRol } from "@/lib/flujoAuth";
+import { Usuario } from "@/types";
 import Paso2FA from "./Paso2FA";
 
 /** Vuelta de Google: canjea el código, pide la sesión de Med-IA y entra según el rol. */
@@ -18,6 +19,10 @@ export default function CallbackGoogle() {
   const { guardarSesion } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [desafio2FA, setDesafio2FA] = useState<Desafio2FA | null>(null);
+  // HU-048: quien había eliminado su cuenta y vuelve con Google
+  const [bienvenidaDeVuelta, setBienvenidaDeVuelta] = useState<Usuario | null>(
+    null,
+  );
   const procesado = useRef(false); // el código es de un solo uso: evita canjearlo dos veces
 
   useEffect(() => {
@@ -50,6 +55,10 @@ export default function CallbackGoogle() {
           return;
         }
         guardarSesion(resultado.token, resultado.usuario);
+        if (resultado.deVuelta) {
+          setBienvenidaDeVuelta(resultado.usuario);
+          return;
+        }
         router.replace(rutaInicioPorRol(resultado.usuario.rol));
       } catch (err) {
         setError(
@@ -76,6 +85,32 @@ export default function CallbackGoogle() {
         }}
         onVolver={() => router.replace("/login")}
       />
+    );
+  }
+
+  if (bienvenidaDeVuelta) {
+    return (
+      <div className="card w-full max-w-md p-6 sm:p-8 text-center">
+        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+          <PartyPopper className="w-6 h-6 text-green-600" />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900">
+          ¡Qué bueno verte de vuelta, {bienvenidaDeVuelta.nombre.split(" ")[0]}!
+        </h1>
+        <p className="text-sm text-gray-500 mt-2 mb-6">
+          Tu cuenta anterior se eliminó, así que empezás con una cuenta nueva.
+          Tu historial anterior ya no está disponible.
+        </p>
+        <button
+          type="button"
+          onClick={() =>
+            router.replace(rutaInicioPorRol(bienvenidaDeVuelta.rol))
+          }
+          className="btn-primary w-full py-2.5"
+        >
+          Continuar
+        </button>
+      </div>
     );
   }
 
