@@ -10,6 +10,7 @@ import { SALT_ROUNDS } from "../../constants";
 import { signToken } from "../auth/auth.service";
 import { enviarCorreo } from "../../shared/correo";
 import { plantillaCorreo } from "../../shared/plantillaCorreo";
+import { huellaCorreo } from "../../shared/huellaCorreo";
 
 const SELECT_PERFIL = {
   id_usuario: true,
@@ -223,6 +224,7 @@ export async function eliminarCuenta(
         correo: correoAnonimo,
         password_hash: "cuenta-eliminada",
         eliminado_en: new Date(),
+        huella_correo: huellaCorreo(usuario.correo), // para reconocerlo si vuelve
         activo: false,
         verificado: false,
         recibir_correos: false,

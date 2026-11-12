@@ -53,6 +53,7 @@ model Usuario {
   doble_factor      Boolean    @default(false) // HU-046
   recibir_correos   Boolean    @default(true)  // HU-070 CA-4
   eliminado_en      DateTime?                  // HU-048: cuenta eliminada y anonimizada por su dueño
+    huella_correo     String?    @db.VarChar(64) // HU-048: huella (HMAC) del correo de una cuenta eliminada
   created_at        DateTime   @default(now())
   updated_at        DateTime   @updatedAt
 
@@ -60,6 +61,8 @@ model Usuario {
   medico            Medico?
   intentos_login    IntentoLogin[]
   auditoria         AuditoriaAcceso[]
+  
+  @@index([huella_correo])
 }
 
 model Paciente {

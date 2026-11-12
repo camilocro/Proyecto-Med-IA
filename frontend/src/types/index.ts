@@ -103,6 +103,8 @@ export interface RegisterInput {
 export interface AuthResponse {
   token: string;
   usuario: Usuario;
+  /** HU-048: el correo fue de una cuenta eliminada; se le da la bienvenida de vuelta */
+  deVuelta?: boolean;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────

@@ -1,11 +1,17 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import prisma from "../../config/prisma";
-import { AppError, forbidden, unauthorized } from "../../errors/AppError";
-import { SALT_ROUNDS, MAX_LONGITUD_NOMBRE } from "../../constants";
+import { AppError, unauthorized } from "../../errors/AppError";
+import {
+  SALT_ROUNDS,
+  MAX_LONGITUD_NOMBRE,
+  CODIGO_CUENTA_DESACTIVADA,
+  MENSAJE_CUENTA_DESACTIVADA,
+} from "../../constants";
 import { iniciarDesafio2FA } from "./dobleFactor.service";
 import { registrarIntentoLogin } from "./intentos.service";
 import { signToken, usuarioPublico } from "./auth.service";
+import { fueCuentaEliminada } from "../../shared/huellaCorreo";
 
 const TIMEOUT_SUPABASE_MS = 10_000;
 const MENSAJE_GOOGLE_INVALIDO =
@@ -80,7 +86,10 @@ async function entrarOCrearCuenta(correo: string, nombre: string) {
     );
   }
 
+  let deVuelta = false;
   if (!usuario) {
+    // HU-048: si el correo fue de una cuenta eliminada, el frontend le da la bienvenida de vuelta
+    deVuelta = await fueCuentaEliminada(correo);
     // Sin contraseña propia: se guarda una aleatoria que nadie conoce.
     // Si después quiere entrar con correo y contraseña, usa "¿Olvidaste tu contraseña?".
     const passwordHash = await bcrypt.hash(
@@ -104,8 +113,10 @@ async function entrarOCrearCuenta(correo: string, nombre: string) {
       );
     }
     if (!usuario.activo) {
-      throw forbidden(
-        "Tu cuenta está desactivada. Comunícate con el administrador para reactivarla.",
+      throw new AppError(
+        MENSAJE_CUENTA_DESACTIVADA,
+        403,
+        CODIGO_CUENTA_DESACTIVADA,
       );
     }
     if (!usuario.verificado) {
@@ -120,11 +131,15 @@ async function entrarOCrearCuenta(correo: string, nombre: string) {
   if (usuario.rol === "medico" && usuario.doble_factor) {
     return iniciarDesafio2FA(usuario);
   }
-  return { token: signToken(usuario), usuario: usuarioPublico(usuario) };
+  return {
+    token: signToken(usuario),
+    usuario: usuarioPublico(usuario),
+    deVuelta,
+  };
 }
 
 /**
- * Inicio de sesión con Google. Responde lo mismo que /auth/login: { token, usuario }
+ * Inicio de sesión con Google. Responde lo mismo que /auth/login: { token, usuario, deVuelta }
  * o { requiere2FA, desafio } para el médico con verificación en dos pasos.
  */
 export async function loginConGoogle(accessToken: string, ip: string) {
